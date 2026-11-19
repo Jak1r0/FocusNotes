@@ -26,10 +26,14 @@ android {
     signingConfigs {
         release {
             def props = rootProject.ext.signingProps
-            storeFile file(props.getProperty("FN_RELEASE_STORE_FILE", "app/focusnotes-release.jks"))
+            storeFile file(props.getProperty("FN_RELEASE_STORE_FILE", "focusnotes-release.jks"))
             storePassword props.getProperty("FN_RELEASE_STORE_PASSWORD", "")
             keyAlias props.getProperty("FN_RELEASE_KEY_ALIAS", "focusnotes")
             keyPassword props.getProperty("FN_RELEASE_KEY_PASSWORD", "")
+            enableV1Signing true
+            enableV2Signing true
+            enableV3Signing true
+            enableV4Signing true
         }
     }
     buildTypes {

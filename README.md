@@ -39,6 +39,8 @@ FocusNotes 是一款面向 Windows 和 Android 的任务管理与专注工具，
 
 升级时请使用与已安装版本相同的签名。若更换签名，Android 会拒绝覆盖安装，请先导出备份再卸载重装。
 
+发布 APK 使用 APK Signature Scheme v2 / v3 / v4 签名，并提供 v4 的 `.idsig` 附属文件用于增量安装。
+
 > 注意：0.1.0 将 Android `versionCode` 重置为 1。已安装此前 2.x 版本的设备无法直接覆盖安装，请先导出 JSON 备份，卸载旧版后再安装 0.1.0。
 
 ## 配置
