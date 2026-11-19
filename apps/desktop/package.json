@@ -1,9 +1,9 @@
 {
   "name": "@focusnotes/desktop",
-  "version": "2.3.0",
+  "version": "2.4.0",
   "private": true,
   "type": "module",
-  "description": "跨平台智能待办便笺",
+  "description": "\u8de8\u5e73\u53f0\u667a\u80fd\u5f85\u529e\u4fbf\u7b3a",
   "author": "FocusNotes",
   "main": "electron/main.cjs",
   "scripts": {
@@ -33,11 +33,16 @@
   "build": {
     "appId": "com.focusnotes.desktop",
     "productName": "FocusNotes",
-    "directories": { "output": "release-230b" },
+    "directories": {
+      "output": "release-240b"
+    },
     "asar": true,
     "compression": "maximum",
     "npmRebuild": false,
-    "electronLanguages": ["zh-CN", "en-US"],
+    "electronLanguages": [
+      "zh-CN",
+      "en-US"
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*",
@@ -47,7 +52,14 @@
       "!**/*.md"
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "electron/icon.ico",
       "signAndEditExecutable": false
     },

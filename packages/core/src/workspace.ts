@@ -223,6 +223,44 @@ export interface FocusStats {
   weekMinutes: number
 }
 
+/** 今日完成计数：待办完成数 + 习惯打卡数 + 番茄数。 */
+export interface TodayCompletion {
+  tasks: number
+  habits: number
+  pomodoros: number
+  total: number
+}
+
+/** 睡眠定时剩余毫秒；无效输入或已到期返回 <= 0。 */
+export function sleepTimerRemaining(startedAt: string | number, durationMinutes: number, now: string | number | Date = new Date()): number {
+  const start = typeof startedAt === 'number' ? startedAt : Date.parse(startedAt)
+  const current = now instanceof Date ? now.getTime() : typeof now === 'number' ? now : Date.parse(now)
+  if (!Number.isFinite(start) || !Number.isFinite(current) || !Number.isFinite(durationMinutes) || durationMinutes <= 0) return 0
+  return start + durationMinutes * 60_000 - current
+}
+
+/** 提前提醒分钟数钳制：0–10080 整数，非法值返回 null。 */
+export function clampReminderMinutes(value: unknown, max = 10080): number | null {
+  if (value === null || value === undefined) return null
+  const minutes = Number(value)
+  if (!Number.isFinite(minutes)) return null
+  return Math.max(0, Math.min(max, Math.round(minutes)))
+}
+
+/** 聚合今日完成：待办（当天完成且未删除）+ 习惯（当天安排且已打卡）+ 番茄（当天 focus 会话）。 */
+export function todayCompletion(input: {
+  todos: readonly Pick<TodoItem, 'completed' | 'completedAt' | 'deleted'>[]
+  habits: readonly Habit[]
+  habitLogs: Record<string, string[]>
+  sessions: readonly FocusSession[]
+}, now: Date = new Date()): TodayCompletion {
+  const today = dateKey(now)
+  const tasks = input.todos.filter((item) => item.completed && !item.deleted && item.completedAt && dateKey(item.completedAt) === today).length
+  const habits = input.habits.filter((item) => !item.archived && isHabitScheduled(item, now) && (input.habitLogs[item.id] ?? []).includes(today)).length
+  const pomodoros = input.sessions.filter((item) => item.mode === 'focus' && dateKey(item.startedAt) === today).length
+  return { tasks, habits, pomodoros, total: tasks + habits + pomodoros }
+}
+
 export function focusStats(sessions: readonly FocusSession[], now = new Date()): FocusStats {
   const today = dateKey(now)
   const weekStart = startOfDay(addDays(now, -6)).getTime()

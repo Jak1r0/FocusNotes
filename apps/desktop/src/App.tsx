@@ -5,6 +5,7 @@ import {
   FONT_OPTIONS,
   LIST_COLORS,
   sortTodos,
+  todayCompletion,
   type TodoDraft,
   type TodoItem,
 } from '@focusnotes/core'
@@ -118,8 +119,11 @@ export default function App() {
       enabled: remindEnabled,
       leadMinutes,
       items: active.map(({ id, title, dueAt, completed }) => ({ id, title, dueAt, completed })),
+      habits: ws.extras.habits
+        .filter((habit) => !habit.archived && habit.reminder)
+        .map((habit) => ({ id: habit.id, name: habit.name, reminder: habit.reminder })),
     })
-  }, [active, remindEnabled, leadMinutes])
+  }, [active, remindEnabled, leadMinutes, ws.extras.habits])
 
   useEffect(() => {
     window.localStorage.setItem('focusnotes.theme', themeMode)
@@ -218,6 +222,13 @@ export default function App() {
       return applyProfileResult(await api.reveal(), '已打开档案文件夹。')
     },
   }
+
+  const completion = useMemo(() => todayCompletion({
+    todos: active,
+    habits: ws.extras.habits,
+    habitLogs: ws.extras.habitLogs,
+    sessions: ws.extras.focusSessions,
+  }), [active, ws.extras.habits, ws.extras.habitLogs, ws.extras.focusSessions])
 
   const counts = {
     today: open.filter((todo) => todo.dueAt && dateKey(todo.dueAt) <= todayKey).length,
@@ -330,6 +341,7 @@ export default function App() {
       sessions={ws.extras.focusSessions}
       tasks={open}
       timer={timer}
+      completion={completion}
     />
   } else if (view === 'habits') {
     title = '习惯'
@@ -378,6 +390,7 @@ export default function App() {
       lists={lists}
       habits={ws.extras.habits}
       habitLogs={ws.extras.habitLogs}
+      completion={completion}
       onNavigate={setView}
       onToggleTask={(id) => void run(ws.toggleTask(id))}
       onToggleHabit={ws.toggleHabit}

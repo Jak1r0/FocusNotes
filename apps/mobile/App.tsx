@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, useColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
+import Slider from '@react-native-community/slider'
+import PagerView, { type PagerViewOnPageScrollEvent, type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
 import { CalendarDays, Check, Cloud, Database, Flame, ListTodo, Plus, Upload, Download, Pencil, Settings, Timer } from 'lucide-react-native'
 import {
+  clampReminderMinutes,
   createDefaultExtras,
   dateKey,
   habitStreak,
@@ -10,6 +13,9 @@ import {
   mergeSyncedTodos,
   normalizeExtras,
   normalizeTodos,
+  pageIndex,
+  pageKey,
+  PAGE_KEYS,
   QUADRANTS,
   TodoStore,
   toggleHabitLog,
@@ -113,12 +119,16 @@ export default function App() {
   const [editing, setEditing] = useState<TodoItem | 'new' | null>(null)
   const [defaultDueAt, setDefaultDueAt] = useState<string | null>(null)
   const [layoutDensity, setLayoutDensity] = useState<LayoutDensity>('standard')
+  const [layoutScale, setLayoutScale] = useState(1)
   const [defaultReminderMinutesBefore, setDefaultReminderMinutesBefore] = useState(10)
   const systemColorScheme = useColorScheme()
   const extrasRef = useRef(extras)
   extrasRef.current = extras
+  const pagerRef = useRef<PagerView>(null)
   const darkMode = extras.preferences.widget.darkMode
   const isDark = darkMode === 'dark' || (darkMode === 'system' && systemColorScheme === 'dark')
+  const pageBg = isDark ? '#171a20' : '#f5f5f7'
+  const tabBorder = isDark ? '#2c3038' : '#e5e5ea'
   const fontScale = extras.preferences.widget.fontSize / 100
 
   const updateExtras = useCallback(async (update: (current: WorkspaceExtras) => WorkspaceExtras) => {
@@ -147,6 +157,8 @@ export default function App() {
     void AsyncStorage.getItem('focusnotes.mobileDensity')
       .then((value) => {
         if (value === 'compact' || value === 'standard' || value === 'spacious') setLayoutDensity(value)
+        const scale = Number(value)
+        if (Number.isFinite(scale) && scale >= 0.8 && scale <= 1.3) setLayoutScale(scale)
       })
       .catch((reason) => Alert.alert('读取失败', reason instanceof Error ? reason.message : '无法读取界面布局设置。'))
   }, [])
@@ -155,7 +167,8 @@ export default function App() {
     void AsyncStorage.getItem('focusnotes.mobileDefaultReminder')
       .then((value) => {
         const minutes = Number(value)
-        if ([0, 5, 10, 15, 30, 60, 1440].includes(minutes)) setDefaultReminderMinutesBefore(minutes)
+        const clamped = clampReminderMinutes(value, 120)
+        if (clamped !== null) setDefaultReminderMinutesBefore(clamped)
       })
       .catch((reason) => Alert.alert('读取失败', reason instanceof Error ? reason.message : '无法读取提醒设置。'))
   }, [])
@@ -243,15 +256,18 @@ export default function App() {
     timer.toggle()
   }
 
-  function changeLayoutDensity(value: LayoutDensity) {
-    setLayoutDensity(value)
-    void AsyncStorage.setItem('focusnotes.mobileDensity', value)
+  function changeLayoutScale(value: number) {
+    const scale = Math.round(Math.min(1.3, Math.max(0.8, value)) * 20) / 20
+    setLayoutScale(scale)
+    setLayoutDensity(scale < 0.92 ? 'compact' : scale > 1.12 ? 'spacious' : 'standard')
+    void AsyncStorage.setItem('focusnotes.mobileDensity', String(scale))
       .catch((reason) => Alert.alert('保存失败', reason instanceof Error ? reason.message : '无法保存界面布局设置。'))
   }
 
   function changeDefaultReminder(minutes: number) {
-    setDefaultReminderMinutesBefore(minutes)
-    void AsyncStorage.setItem('focusnotes.mobileDefaultReminder', String(minutes))
+    const value = clampReminderMinutes(minutes, 120) ?? 0
+    setDefaultReminderMinutesBefore(value)
+    void AsyncStorage.setItem('focusnotes.mobileDefaultReminder', String(value))
       .catch((reason) => Alert.alert('保存失败', reason instanceof Error ? reason.message : '无法保存提醒设置。'))
   }
 
@@ -267,6 +283,24 @@ export default function App() {
       ...current,
       preferences: { ...current.preferences, widget: { ...current.preferences.widget, fontSize: size } },
     })))
+  }
+
+  function goToPage(next: Page) {
+    setPage(next)
+    if (next === 'data') return
+    pagerRef.current?.setPage(pageIndex(next))
+  }
+
+  function onPageScroll(event: PagerViewOnPageScrollEvent) {
+    const { position, offset } = event.nativeEvent
+    // 滑动过半即切换高亮，让 tab 跟随手势实时反馈。
+    const next = pageKey(offset > 0.5 ? position + 1 : position)
+    setPage((current) => current === next ? current : next)
+  }
+
+  function onPageSelected(event: PagerViewOnPageSelectedEvent) {
+    const next = pageKey(event.nativeEvent.position)
+    setPage((current) => current === next ? current : next)
   }
 
   async function saveList(name: string, color: string) {
@@ -360,28 +394,24 @@ export default function App() {
         <View style={styles.brand}><View style={styles.brandMark}><Check size={14} color="#fff" strokeWidth={3} /></View><Text style={styles.brandText}>FocusNotes</Text></View>
         <Pressable style={styles.cloudButton} onPress={() => setPage('data')}><Settings size={16} color={isDark ? '#aeb6c2' : '#6e6e73'} /><Text style={styles.cloudText}>设置</Text></Pressable>
       </View>
-      <ScrollView contentContainerStyle={[
-        styles.content,
-        layoutDensity === 'compact' && styles.contentCompact,
-        layoutDensity === 'spacious' && styles.contentSpacious,
-      ]} keyboardShouldPersistTaps="handled">
-        <View style={[styles.intro, layoutDensity === 'compact' && styles.introCompact, layoutDensity === 'spacious' && styles.introSpacious]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>{page === 'calendar' ? '安排每一天。' : page === 'habits' ? '每天进步一点。' : page === 'pomodoro' ? '专注一件事。' : page === 'data' ? '设置，按你的习惯。' : '此刻，专注。'}</Text><Text style={styles.subtitle}>{page === 'tasks' ? (activeCount ? `${activeCount} 项待办，按截止时间有序推进。` : '一切安排妥当，保持从容。') : page === 'calendar' ? '按日期查看和安排待办。' : page === 'habits' ? '记录习惯，坚持看得见。' : page === 'pomodoro' ? '番茄时钟与可混搭的沉浸环境音。' : '外观、提醒、存储和同步。'}</Text></View></View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[
-          styles.tabs,
-          layoutDensity === 'compact' && styles.tabsCompact,
-          layoutDensity === 'spacious' && styles.tabsSpacious,
-        ]}>
-          {([
-            ['tasks', ListTodo, '待办'], ['calendar', CalendarDays, '日历'], ['habits', Flame, '习惯'], ['pomodoro', Timer, '专注'], ['data', Settings, '设置'],
-          ] as const).map(([key, Icon, label]) => <Pressable key={key} style={[styles.tab, page === key && styles.tabSelected]} onPress={() => setPage(key)}><Icon size={15} color={page === key ? '#0071e3' : '#6e6e73'} /><Text style={[styles.tabText, page === key && styles.tabTextSelected]}>{label}</Text></Pressable>)}
-        </ScrollView>
-        {page === 'tasks' && <>
-          <View style={[styles.listPickerHeader, layoutDensity === 'compact' && styles.listPickerHeaderCompact]}>
+      <ScrollView style={styles.tabsLayer} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[
+        styles.tabs, styles.tabsFixed,
+        { paddingVertical: Math.round(12 * layoutScale), backgroundColor: pageBg, borderBottomColor: tabBorder },
+      ]}>
+        {([
+          ['tasks', ListTodo, '待办'], ['calendar', CalendarDays, '日历'], ['habits', Flame, '习惯'], ['pomodoro', Timer, '专注'], ['data', Settings, '设置'],
+        ] as const).map(([key, Icon, label]) => <Pressable key={key} style={[styles.tab, page === key && styles.tabSelected]} onPress={() => goToPage(key)}><Icon size={15} color={page === key ? '#0071e3' : '#6e6e73'} /><Text style={[styles.tabText, page === key && styles.tabTextSelected]}>{label}</Text></Pressable>)}
+      </ScrollView>
+      <PagerView ref={pagerRef} style={[styles.pager, page === 'data' && styles.pagerHidden]} initialPage={pageIndex(page)} onPageScroll={onPageScroll} onPageSelected={onPageSelected} keyboardDismissMode="on-drag" overdrag={false}>
+        <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="tasks">
+          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.round(110 * layoutScale) }]} keyboardShouldPersistTaps="handled">
+            <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>此刻，专注。</Text><Text style={styles.subtitle}>{activeCount ? `${activeCount} 项待办，按截止时间有序推进。` : '一切安排妥当，保持从容。'}</Text></View></View>
+          <View style={[styles.listPickerHeader, { marginBottom: Math.round(8 * layoutScale) }]}>
             <Text style={styles.listPickerTitle}>清单</Text>
             {selectedList && <Pressable style={styles.manageList} onPress={() => setEditingList(selectedList)}><Pencil size={12} color="#6e6e73" /><Text style={styles.manageListText}>管理</Text></Pressable>}
             <Pressable style={styles.manageList} onPress={() => setEditingList('new')}><Plus size={14} color="#0071e3" /><Text style={styles.addListText}>新清单</Text></Pressable>
           </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.listPills, layoutDensity === 'compact' && styles.listPillsCompact]}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[styles.listPills, { paddingBottom: Math.round(14 * layoutScale) }]}>
             <Pressable style={[styles.listPill, selectedListId === 'all' && styles.listPillSelected]} onPress={() => setSelectedListId('all')}>
               <Text style={[styles.listPillText, selectedListId === 'all' && styles.listPillTextSelected]}>全部</Text>
             </Pressable>
@@ -398,39 +428,52 @@ export default function App() {
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
             {(['all', ...Object.keys(QUADRANTS)] as Filter[]).map((key) => <Pressable key={key} style={[styles.filter, filter === key && styles.filterSelected]} onPress={() => setFilter(key)}>{key !== 'all' && <View style={[styles.filterDot, { backgroundColor: QUADRANTS[key].color }]} />}<Text style={[styles.filterText, filter === key && styles.filterTextSelected]}>{key === 'all' ? '全部' : key === 'important-urgent' ? '紧急重要' : key === 'not-important-urgent' ? '紧急' : key === 'important-not-urgent' ? '重要' : '其他'}</Text></Pressable>)}
           </ScrollView>
-          <View style={[styles.list, layoutDensity === 'spacious' && styles.listSpacious]}>
+          <View style={[styles.list, { gap: Math.round(9 * layoutScale) }]}>
             {loading ? <View style={styles.empty}><ListTodo size={30} color="#8e8d93" /><Text style={styles.emptyTitle}>正在读取待办…</Text></View> : (() => {
               const listTodos = visible.filter((todo) => selectedListId === 'all' || todo.listId === selectedListId)
               return listTodos.length ? listTodos.map((todo) => <TodoItemCard key={todo.id} todo={todo} onToggle={(id) => run(store.toggle(id))} onEdit={setEditing} onDelete={confirmDelete} />) : <View style={styles.empty}><ListTodo size={32} color="#8e8d93" /><Text style={styles.emptyTitle}>{selectedList ? `“${selectedList.name}”还没有待办` : filter === 'all' ? '暂无待办' : '此象限暂无待办'}</Text><Text style={styles.emptyText}>用一句话，轻松安排下一件事。</Text></View>
             })()}
           </View>
           <Text style={styles.localStatus}><Text style={styles.savedDot}>●</Text> 已保存在本机</Text>
-        </>}
-        {page === 'calendar' && <CalendarView tasks={todos} onCreate={(day) => openNew(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9).toISOString())} onEdit={setEditing} onToggle={(id) => run(store.toggle(id))} />}
-        {page === 'habits' && <HabitsView
-          habits={extras.habits}
-          habitLogs={extras.habitLogs}
-          onToggle={(habitId, day) => run(updateExtras((current) => ({ ...current, habitLogs: { ...current.habitLogs, [habitId]: toggleHabitLog(current.habitLogs[habitId] ?? [], day) } })))}
-          onAdd={(habit) => run(updateExtras((current) => ({ ...current, habits: [...current.habits, habit], habitLogs: { ...current.habitLogs, [habit.id]: [] } })))}
-          onUpdate={(habit) => run(updateExtras((current) => ({ ...current, habits: current.habits.map((item) => item.id === habit.id ? habit : item) })))}
-          onDelete={(habitId) => {
-            run(updateExtras((current) => {
-              const habitLogs = { ...current.habitLogs }
-              delete habitLogs[habitId]
-              return { ...current, habits: current.habits.filter((habit) => habit.id !== habitId), habitLogs }
-            }))
-          }}
-        />}
-        {page === 'pomodoro' && <PomodoroView
-          preferences={extras.preferences}
-          sessions={extras.focusSessions}
-          tasks={todos}
-          timer={timer}
-          onAdjustFocusMinutes={(minutes) => run(updateExtras((current) => ({ ...current, preferences: { ...current.preferences, pomodoroMinutes: minutes } })))}
-          onToggleTimer={() => run(toggleTimer())}
-          onRequestNotification={() => requestNotificationPermission()}
-        />}
-        {page === 'data' && <View style={styles.dataCard}>
+          </ScrollView>
+          <Pressable style={styles.fab} onPress={() => openNew()} accessibilityLabel="新建待办"><Plus size={27} color="#fff" /></Pressable>
+        </View>
+        <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="calendar">
+          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.round(100 * layoutScale) }]} keyboardShouldPersistTaps="handled">
+            <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>安排每一天。</Text><Text style={styles.subtitle}>按日期查看和安排待办。</Text></View></View>
+            <CalendarView tasks={todos} onCreate={(day) => openNew(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9).toISOString())} onEdit={setEditing} onToggle={(id) => run(store.toggle(id))} />
+          </ScrollView>
+        </View>
+        <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="habits">
+          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.round(100 * layoutScale) }]} keyboardShouldPersistTaps="handled">
+            <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>每天进步一点。</Text><Text style={styles.subtitle}>记录习惯，坚持看得见。</Text></View></View>
+            <HabitsView
+              habits={extras.habits}
+              habitLogs={extras.habitLogs}
+              onToggle={(habitId, day) => run(updateExtras((current) => ({ ...current, habitLogs: { ...current.habitLogs, [habitId]: toggleHabitLog(current.habitLogs[habitId] ?? [], day) } })))}
+              onAdd={(habit) => run(updateExtras((current) => ({ ...current, habits: [...current.habits, habit], habitLogs: { ...current.habitLogs, [habit.id]: [] } })))}
+              onUpdate={(habit) => run(updateExtras((current) => ({ ...current, habits: current.habits.map((item) => item.id === habit.id ? habit : item) })))}
+              onDelete={(habitId) => { run(updateExtras((current) => { const habitLogs = { ...current.habitLogs }; delete habitLogs[habitId]; return { ...current, habits: current.habits.filter((habit) => habit.id !== habitId), habitLogs } })) }}
+            />
+          </ScrollView>
+        </View>
+        <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="pomodoro">
+          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.round(100 * layoutScale) }]} keyboardShouldPersistTaps="handled">
+            <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>专注一件事。</Text><Text style={styles.subtitle}>番茄时钟与可混搭的沉浸环境音。</Text></View></View>
+            <PomodoroView
+              preferences={extras.preferences}
+              sessions={extras.focusSessions}
+              tasks={todos}
+              timer={timer}
+              onAdjustFocusMinutes={(minutes) => run(updateExtras((current) => ({ ...current, preferences: { ...current.preferences, pomodoroMinutes: minutes } })))}
+              onToggleTimer={() => run(toggleTimer())}
+              onRequestNotification={() => requestNotificationPermission()}
+            />
+          </ScrollView>
+        </View>
+      </PagerView>
+      {page === 'data' && <ScrollView style={styles.settingsOverlay} contentContainerStyle={[styles.content, { paddingBottom: Math.round(100 * layoutScale) }]} keyboardShouldPersistTaps="handled">
+        <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>设置，按你的习惯。</Text><Text style={styles.subtitle}>外观、提醒、存储和同步。</Text></View></View>
           <View style={styles.layoutSettings}>
             <View><Text style={styles.actionTitle}>外观模式</Text><Text style={styles.actionHint}>跟随系统，或手动选择明暗主题</Text></View>
             <View style={styles.optionRow}>{([
@@ -438,29 +481,32 @@ export default function App() {
             ] as const).map(([value, label]) => <Pressable key={value} style={[styles.densityButton, darkMode === value && styles.densityButtonSelected]} onPress={() => changeAppearance(value)}><Text style={[styles.densityText, darkMode === value && styles.densityTextSelected]}>{label}</Text></Pressable>)}</View>
           </View>
           <View style={styles.layoutSettings}>
-            <View><Text style={styles.actionTitle}>字体大小</Text><Text style={styles.actionHint}>当前 {extras.preferences.widget.fontSize}%</Text></View>
-            <View style={styles.optionRow}>{[80, 90, 100, 110, 120, 140].map((size) => <Pressable key={size} style={[styles.densityButton, extras.preferences.widget.fontSize === size && styles.densityButtonSelected]} onPress={() => changeFontSize(size)}><Text style={[styles.densityText, extras.preferences.widget.fontSize === size && styles.densityTextSelected]}>{size}%</Text></Pressable>)}</View>
+            <View><Text style={styles.actionTitle}>字体大小</Text><Text style={styles.actionHint}>当前 {extras.preferences.widget.fontSize}% · 线性调整</Text></View>
+            <Slider style={styles.settingSlider} minimumValue={80} maximumValue={140} step={5}
+              value={extras.preferences.widget.fontSize} onSlidingComplete={(value) => changeFontSize(Math.round(value))}
+              minimumTrackTintColor="#0071e3" maximumTrackTintColor="#d1d1d6" thumbTintColor="#0071e3" />
+            <Text style={styles.sliderScale}><Text>80%</Text><Text>140%</Text></Text>
           </View>
           <View style={styles.layoutSettings}>
-            <View><Text style={styles.actionTitle}>默认提前提醒</Text><Text style={styles.actionHint}>新待办可在截止前收到通知，也可单独设置</Text></View>
-            <View style={styles.optionRow}>{([
-              [0, '关闭'], [5, '5 分钟'], [10, '10 分钟'], [15, '15 分钟'], [30, '30 分钟'], [60, '1 小时'], [1440, '1 天'],
-            ] as Array<[number, string]>).map(([minutes, label]) => <Pressable key={minutes} style={[styles.densityButton, defaultReminderMinutesBefore === minutes && styles.densityButtonSelected]} onPress={() => changeDefaultReminder(minutes)}><Text style={[styles.densityText, defaultReminderMinutesBefore === minutes && styles.densityTextSelected]}>{label}</Text></Pressable>)}</View>
+            <View><Text style={styles.actionTitle}>默认提前提醒</Text><Text style={styles.actionHint}>{defaultReminderMinutesBefore === 0 ? '关闭' : `当前 ${defaultReminderMinutesBefore} 分钟前`} · 可拖动调整</Text></View>
+            <Slider style={styles.settingSlider} minimumValue={0} maximumValue={120} step={5}
+              value={defaultReminderMinutesBefore} onSlidingComplete={(value) => changeDefaultReminder(Math.round(value))}
+              minimumTrackTintColor="#0071e3" maximumTrackTintColor="#d1d1d6" thumbTintColor="#0071e3" />
+            <Text style={styles.sliderScale}><Text>关闭</Text><Text>120 分钟</Text></Text>
           </View>
           <View style={styles.layoutSettings}>
-            <View><Text style={styles.actionTitle}>界面高度</Text><Text style={styles.actionHint}>按屏幕大小调整页面疏密，适配全面屏</Text></View>
-            <View style={styles.densityOptions}>{([
-              ['compact', '紧凑'], ['standard', '标准'], ['spacious', '宽松'],
-            ] as Array<[LayoutDensity, string]>).map(([value, label]) => <Pressable key={value} style={[styles.densityButton, layoutDensity === value && styles.densityButtonSelected]} onPress={() => changeLayoutDensity(value)}><Text style={[styles.densityText, layoutDensity === value && styles.densityTextSelected]}>{label}</Text></Pressable>)}</View>
+            <View><Text style={styles.actionTitle}>界面高度</Text><Text style={styles.actionHint}>当前 {Math.round(layoutScale * 100)}% · 紧凑 / 标准 / 宽松</Text></View>
+            <Slider style={styles.settingSlider} minimumValue={0.8} maximumValue={1.3} step={0.05}
+              value={layoutScale} onSlidingComplete={changeLayoutScale}
+              minimumTrackTintColor="#0071e3" maximumTrackTintColor="#d1d1d6" thumbTintColor="#0071e3" />
+            <Text style={styles.sliderScale}><Text>紧凑</Text><Text>标准</Text><Text>宽松</Text></Text>
           </View>
           <View style={styles.dataInfo}><Database size={20} color="#0071e3" /><View style={styles.dataInfoText}><Text style={styles.dataTitle}>本地数据存储</Text><Text style={styles.dataHint}>待办、习惯和专注记录保存在此设备的应用存储中。</Text></View></View>
           <Pressable style={styles.dataAction} onPress={() => run(exportData())}><Download size={17} color="#0071e3" /><View style={styles.actionText}><Text style={styles.actionTitle}>导出完整备份</Text><Text style={styles.actionHint}>保存为 JSON 文件，可用于迁移或恢复</Text></View></Pressable>
           <Pressable style={styles.dataAction} onPress={() => run(importData())}><Upload size={17} color="#0071e3" /><View style={styles.actionText}><Text style={styles.actionTitle}>导入并合并</Text><Text style={styles.actionHint}>选择备份文件，合并待办、习惯和历史</Text></View></Pressable>
           <Pressable style={styles.dataAction} onPress={() => run(syncFile())}><Cloud size={17} color="#0071e3" /><View style={styles.actionText}><Text style={styles.actionTitle}>同步云盘文件</Text><Text style={styles.actionHint}>选择云盘中的同一 JSON 文件，双向合并数据</Text></View></Pressable>
           <Text style={styles.syncNote}>云盘同步通过 Android 文件选择器访问你授权的云盘，不会把数据上传到 FocusNotes 服务器。</Text>
-        </View>}
-      </ScrollView>
-      {page === 'tasks' && <Pressable style={styles.fab} onPress={() => openNew()} accessibilityLabel="新建待办"><Plus size={27} color="#fff" /></Pressable>}
+      </ScrollView>}
     </KeyboardAvoidingView>
     {editing && <EditTodoModal
       todo={editing === 'new' ? undefined : editing}
@@ -495,6 +541,8 @@ const styles = StyleSheet.create({
   cloudButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6 },
   cloudText: { color: '#6e6e73', fontSize: 11 },
   content: { paddingHorizontal: 18, paddingBottom: 100 },
+  settingSlider: { width: '100%', height: 40, marginTop: 6 },
+  sliderScale: { flexDirection: 'row', justifyContent: 'space-between', color: '#8e8d93', fontSize: 10 },
   contentCompact: { paddingBottom: 76 },
   contentSpacious: { paddingBottom: 120 },
   intro: { flexDirection: 'row', alignItems: 'flex-end', marginVertical: 22 },
@@ -506,6 +554,12 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: 7, color: '#6e6e73', fontSize: 12, lineHeight: 18 },
   filters: { gap: 6, paddingVertical: 18 },
   tabs: { gap: 8, paddingVertical: 12 },
+  tabsLayer: { flexGrow: 0 },
+  tabsFixed: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e5e5ea', backgroundColor: '#f5f5f7' },
+  pager: { flex: 1 },
+  pagerHidden: { display: 'none' },
+  settingsOverlay: { flex: 1 },
+  pagerPage: { flex: 1 },
   tabsCompact: { paddingVertical: 6 },
   tabsSpacious: { paddingVertical: 18 },
   tab: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 15, borderRadius: 20, backgroundColor: '#ececf0' },

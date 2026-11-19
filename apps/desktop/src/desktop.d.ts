@@ -38,6 +38,7 @@ export interface ReminderPayload {
   enabled: boolean
   leadMinutes: number
   items: Array<{ id: string; title: string; dueAt: string | null; completed: boolean }>
+  habits?: Array<{ id: string; name: string; reminder: string | null }>
 }
 
 export type ThemeMode = 'system' | 'light' | 'dark' | 'sun'
@@ -71,6 +72,7 @@ export interface WidgetData {
   habitLogs: Record<string, string[]>
   openCount: number
   doneToday: number
+  completion: import('@focusnotes/core').TodayCompletion
   countdowns: Array<{ id: string; title: string; dueAt: string }>
 }
 

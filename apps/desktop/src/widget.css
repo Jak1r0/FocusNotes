@@ -98,6 +98,9 @@ button { cursor: pointer; }
 .widget-close:hover { color: var(--w-text); background: rgba(128, 128, 128, .16); }
 
 .widget-scroll { display: flex; flex: 1; flex-direction: column; gap: 6px; min-height: 0; padding: 0 5px 5px; overflow-y: auto; scrollbar-width: thin; }
+.widget-completion-bar { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 5px 7px; color: var(--w-soft); font-size: calc(8.5px * var(--w-scale, 1)); border: 1px solid var(--w-border); border-radius: 8px; background: var(--w-card); }
+.widget-completion-bar strong { color: var(--w-accent); font-size: calc(12px * var(--w-scale, 1)); }
+.widget-completion-bar small { color: var(--w-faint); font-size: calc(7.5px * var(--w-scale, 1)); }
 .widget-scroll::-webkit-scrollbar { width: 3px; }
 .widget-scroll::-webkit-scrollbar-thumb { border-radius: 3px; background: var(--w-faint); }
 

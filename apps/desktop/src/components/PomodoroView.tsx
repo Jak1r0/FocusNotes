@@ -1,14 +1,15 @@
 import { useMemo } from 'react'
-import { Brain, CheckCircle2, Coffee, Music2, Pause, Play, RotateCcw, Square, Timer, Volume2, VolumeX } from 'lucide-react'
-import { focusStats, type FocusSession, type TodoItem, type WorkspacePreferences } from '@focusnotes/core'
+import { Brain, CheckCircle2, Coffee, Moon, Music2, Pause, Play, RotateCcw, Square, Timer, Volume2, VolumeX } from 'lucide-react'
+import { focusStats, type FocusSession, type TodayCompletion, type TodoItem, type WorkspacePreferences } from '@focusnotes/core'
 import type { PomodoroTimerApi } from '../usePomodoroTimer'
-import { useWhiteNoise } from '../useWhiteNoise'
+import { SLEEP_OPTIONS, useWhiteNoise } from '../useWhiteNoise'
 
 interface PomodoroViewProps {
   preferences: WorkspacePreferences
   sessions: FocusSession[]
   tasks: TodoItem[]
   timer: PomodoroTimerApi
+  completion: TodayCompletion
 }
 
 function formatClock(totalSeconds: number): string {
@@ -24,7 +25,7 @@ function sessionTime(iso: string): string {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-export function PomodoroView({ preferences, sessions, tasks, timer }: PomodoroViewProps) {
+export function PomodoroView({ preferences, sessions, tasks, timer, completion }: PomodoroViewProps) {
   const { mode, phase, running, remaining, elapsed, taskId, setMode, setTaskId, toggle, reset, finishStopwatch } = timer
   const noise = useWhiteNoise()
 
@@ -103,6 +104,11 @@ export function PomodoroView({ preferences, sessions, tasks, timer }: PomodoroVi
 
       <aside className="pomodoro-side">
         <section className="overview-grid">
+          <div className="stat-card accent">
+            <span>今日完成</span>
+            <strong>{completion.total}</strong>
+            <small>待办 {completion.tasks} · 习惯 {completion.habits} · 番茄 {completion.pomodoros}</small>
+          </div>
           <div className="stat-card">
             <span>今日番茄</span>
             <strong>{stats.todayCount}</strong>
@@ -147,6 +153,22 @@ export function PomodoroView({ preferences, sessions, tasks, timer }: PomodoroVi
             <input type="range" min={0} max={100} value={noise.volume} onChange={(event) => noise.setVolume(Number(event.target.value))} aria-label="白噪音音量" />
             <span>{noise.volume}%</span>
           </label>
+          <div className="noise-sleep">
+            <span className="noise-sleep-label"><Moon size={12} /> 睡眠定时</span>
+            <div className="noise-sleep-options">
+              <button className={`noise-sleep-chip${noise.sleepMinutes === null ? ' active' : ''}`} onClick={() => noise.setSleep(null)}>关闭</button>
+              {SLEEP_OPTIONS.map((minutes) => (
+                <button key={minutes}
+                  className={`noise-sleep-chip${noise.sleepMinutes === minutes ? ' active' : ''}`}
+                  onClick={() => noise.setSleep(minutes)}>{minutes}分</button>
+              ))}
+            </div>
+            {noise.playing && noise.sleepMinutes !== null && (
+              <span className="noise-sleep-remaining">
+                剩余 {Math.ceil(noise.sleepRemaining / 60_000)} 分钟 · 最后 15 秒渐弱停止
+              </span>
+            )}
+          </div>
         </section>
 
         <section className="card records-card">

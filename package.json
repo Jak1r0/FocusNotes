@@ -24,6 +24,8 @@
     "@rollup/rollup-win32-x64-msvc": "4.68.5"
   },
   "dependencies": {
+    "@react-native-community/slider": "^4.5.1",
+    "react-native-pager-view": "^6.4.1",
     "react-native-svg": "15.8.0"
   }
 }

@@ -145,7 +145,7 @@ function newProfileId() {
 
 /* ── 到期提醒 ────────────────────────────────────────────── */
 
-const reminder = { enabled: true, leadMinutes: 120, items: [] }
+const reminder = { enabled: true, leadMinutes: 120, items: [], habits: [] }
 let firedMap = {}
 let reminderTimer = null
 
@@ -228,7 +228,37 @@ function checkReminders() {
     dirty = true
     showReminder(item, delta)
   }
+  if (checkHabitReminders(now)) dirty = true
   if (dirty) { pruneFired(now); saveFired() }
+}
+
+// 习惯每日提醒：habit.reminder 是本地 HH:MM，按当天日期去重，每天每个习惯最多提醒一次。
+function checkHabitReminders(now) {
+  let dirty = false
+  if (!reminder.enabled || !Array.isArray(reminder.habits)) return false
+  const date = new Date(now)
+  const today = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const current = date.getHours() * 60 + date.getMinutes()
+  for (const habit of reminder.habits) {
+    if (!habit || !habit.id || !habit.reminder || !/^\d{2}:\d{2}$/.test(habit.reminder)) continue
+    const [hours, minutes] = habit.reminder.split(':').map(Number)
+    if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours > 23 || minutes > 59) continue
+    if (current < hours * 60 + minutes) continue
+    const key = `habit:${habit.id}@${today}`
+    if (firedMap[key]) continue
+    firedMap[key] = now
+    dirty = true
+    if (Notification.isSupported()) {
+      const notification = new Notification({
+        title: `${habit.name || '习惯'} · 该打卡了`,
+        body: `今天 ${habit.reminder} 的习惯提醒，花一点时间完成它。`,
+        silent: false,
+      })
+      notification.on('click', () => { showWindow(); mainWindow?.webContents.send('navigate:view', 'habits') })
+      notification.show()
+    }
+  }
+  return dirty
 }
 
 /* ── 深色模式：跟随系统 / 日出日落（OpenWeatherMap）───────── */
@@ -388,6 +418,32 @@ function localDay(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 }
 
+// 与 core 的 todayCompletion 口径一致：待办完成 + 习惯打卡 + 番茄。
+// main.cjs 为 CommonJS，无法直接 import ESM core，故此处镜像实现；core 侧有对应单测锁定口径。
+function todayCompletionMain({ todos, extras, now }) {
+  const today = localDay(now)
+  const tasks = todos.filter((item) => item.completed && !item.deleted && item.completedAt && localDay(new Date(item.completedAt)) === today).length
+  const habits = Array.isArray(extras.habits)
+    ? extras.habits.filter((habit) => {
+        if (habit.archived) return false
+        const start = habit.startDate ? Date.parse(habit.startDate) : Number.NaN
+        if (Number.isFinite(start) && startOfDayLocal(new Date(start)) > startOfDayLocal(now)) return false
+        if (habit.frequency === 'weekdays' && [0, 6].includes(now.getDay())) return false
+        if (habit.frequency === 'weekends' && ![0, 6].includes(now.getDay())) return false
+        const logs = extras.habitLogs && Array.isArray(extras.habitLogs[habit.id]) ? extras.habitLogs[habit.id] : []
+        return logs.includes(today)
+      }).length
+    : 0
+  const sessions = Array.isArray(extras.focusSessions)
+    ? extras.focusSessions.filter((item) => item.mode === 'focus' && item.startedAt && localDay(new Date(item.startedAt)) === today).length
+    : 0
+  return { tasks, habits, pomodoros: sessions, total: tasks + habits + sessions }
+}
+
+function startOfDayLocal(date) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+}
+
 function widgetData() {
   const doc = activeDoc()
   const todos = (doc.todos || []).filter((todo) => todo && !todo.deleted)
@@ -414,7 +470,8 @@ function widgetData() {
     habits: Array.isArray(extras.habits) ? extras.habits : [],
     habitLogs: extras.habitLogs && typeof extras.habitLogs === 'object' ? extras.habitLogs : {},
     openCount: open.length,
-    doneToday: todos.filter((todo) => todo.completed && todo.completedAt && localDay(new Date(todo.completedAt)) === localDay()).length,
+    doneToday: todayCompletionMain({ todos, extras, now: new Date() }).total,
+    completion: todayCompletionMain({ todos, extras, now: new Date() }),
     countdowns: open.filter((todo) => Array.isArray(todo.tags) && todo.tags.includes('纪念日') && todo.dueAt)
       .slice(0, 3)
       .map((todo) => ({ id: todo.id, title: todo.title, dueAt: todo.dueAt })),
@@ -619,6 +676,7 @@ function registerIpc() {
       const lead = Number(data.leadMinutes)
       if (Number.isFinite(lead)) reminder.leadMinutes = Math.min(7 * 24 * 60, Math.max(1, lead))
       reminder.items = Array.isArray(data.items) ? data.items.slice(0, 500) : []
+      reminder.habits = Array.isArray(data.habits) ? data.habits.slice(0, 200) : []
       const pending = reminder.items.filter((item) => item && !item.completed).length
       tray?.setToolTip(pending ? `FocusNotes · ${pending} 项待办` : 'FocusNotes 桌面待办')
     }
