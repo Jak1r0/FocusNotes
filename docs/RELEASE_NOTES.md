@@ -49,7 +49,7 @@
 
 - **数据格式**：`extras` 新增 `memos` 字段，旧数据可正常读取；0.1.0 读取新备份时会忽略备忘录。
 - **Android**：`versionCode` 为 2，可从 0.1.0 覆盖安装；从 2.x 版本升级仍需卸载重装。
-- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`，与 0.1.0 相同；不再提供 `.idsig`。
+- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`，与 0.1.0 相同；不再提供 `.idsig`。Release 附件提供公钥证书 `FocusNotes-Android-0.1.1-cert.pem` 与 APK SHA-256 校验文件，私钥 keystore 不公开。
 - **Gitee**：同步文件格式版本为 1，仅写入用户自己的仓库。
 - **容量限制**：备忘录最多 500 条、单条 5 万字符；Gitee 以整文件提交，多设备并发可能冲突。
 
