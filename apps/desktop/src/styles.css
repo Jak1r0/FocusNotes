@@ -1212,3 +1212,28 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* ── 备忘录 ─────────────────────────────────────────────── */
+.memos-view { display: flex; flex: 1; min-height: 0; gap: 12px; }
+.memos-list { display: flex; flex: 0 0 250px; flex-direction: column; min-height: 0; padding: 12px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); }
+.memos-search { display: flex; align-items: center; gap: 7px; padding: 7px 10px; color: var(--faint); border: 1px solid var(--border-soft); border-radius: 9px; background: var(--surface-2); }
+.memos-search input { flex: 1; min-width: 0; color: var(--text); font-size: 12px; border: 0; background: transparent; outline: none; }
+.memos-new { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; margin-top: 8px; color: var(--accent-contrast); font-size: 12px; font-weight: 600; border: 0; border-radius: 9px; background: var(--accent); }
+.memos-items { display: flex; flex: 1; flex-direction: column; gap: 4px; margin-top: 10px; overflow-y: auto; }
+.memos-item { display: flex; flex-direction: column; gap: 3px; padding: 9px 10px; text-align: left; border: 1px solid transparent; border-radius: 9px; background: transparent; }
+.memos-item:hover { background: var(--hover); }
+.memos-item.active { border-color: var(--check-border); background: var(--accent-soft); }
+.memos-item-title { display: flex; align-items: center; gap: 5px; color: var(--text); font-size: 12px; font-weight: 600; }
+.memos-item-preview { color: var(--muted); font-size: 10.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.memos-item-time { color: var(--faint); font-size: 9px; }
+.memos-hint { padding: 12px 4px; color: var(--faint); font-size: 11px; }
+.memos-editor { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; padding: 14px 18px; border: 1px solid var(--border-soft); border-radius: 14px; background: var(--surface); }
+.memos-empty { display: flex; flex: 1; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--faint); }
+.memos-toolbar { display: flex; align-items: center; gap: 8px; padding-bottom: 10px; border-bottom: 1px solid var(--border-soft); }
+.memos-counter { margin-left: auto; color: var(--faint); font-size: 10px; }
+.memos-title-input { margin-top: 12px; padding: 6px 0; color: var(--text); font-size: 20px; font-weight: 700; border: 0; border-bottom: 1px solid var(--border-soft); background: transparent; outline: none; }
+.memos-content-input { flex: 1; min-height: 0; margin-top: 12px; padding: 0; color: var(--text); font-size: 13px; line-height: 1.75; border: 0; background: transparent; outline: none; resize: none; }
+.ghost-button.danger { color: #d70015; }
+.gitee-actions { display: flex; align-items: center; gap: 8px; margin-top: 10px; }
+.gitee-status { color: var(--faint); font-size: 10px; }
+.scale-legend { display: flex; justify-content: space-between; margin-top: 2px; color: var(--faint); font-size: 9px; }

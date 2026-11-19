@@ -1,3 +1,4 @@
+import { normalizeMemos } from './memo'
 import type {
   FocusSession,
   FontId,
@@ -45,11 +46,12 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   font: 'system',
   widget: { opacity: 100, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100 },
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
-  navHidden: [],
+  navHidden: ['search'],
 }
 
 export const NAV_ITEMS: Array<{ id: NavId; label: string }> = [
   { id: 'today', label: '今天' },
+  { id: 'memos', label: '备忘录' },
   { id: 'pomodoro', label: '番茄专注' },
   { id: 'habits', label: '习惯' },
   { id: 'calendar', label: '日历' },
@@ -80,6 +82,7 @@ export function createDefaultExtras(now = new Date()): WorkspaceExtras {
     habits: [],
     habitLogs: {},
     focusSessions: [],
+    memos: [],
     preferences: { ...DEFAULT_PREFERENCES },
     widgets: ['tasks'],
   }
@@ -429,9 +432,10 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
   const validNav = NAV_ITEMS.map((item) => item.id)
   const rawOrder = Array.isArray(prefRecord.navOrder) ? prefRecord.navOrder.filter((id): id is NavId => validNav.includes(id as NavId)) : []
   const navOrder = [...new Set([...rawOrder, ...validNav.filter((id) => !rawOrder.includes(id))])]
-  const navHidden = Array.isArray(prefRecord.navHidden)
+  // 搜索按钮默认隐藏：旧数据里 navHidden 为空时也套用此默认，用户可在设置里重新开启。
+  const navHidden = Array.isArray(prefRecord.navHidden) && prefRecord.navHidden.length > 0
     ? [...new Set(prefRecord.navHidden.filter((id): id is NavId => validNav.includes(id as NavId)))]
-    : []
+    : ['search' as NavId]
   const preferences: WorkspacePreferences = {
     pomodoroMinutes: numberIn(prefRecord.pomodoroMinutes, DEFAULT_PREFERENCES.pomodoroMinutes, 1, 180),
     shortBreakMinutes: numberIn(prefRecord.shortBreakMinutes, DEFAULT_PREFERENCES.shortBreakMinutes, 1, 60),
@@ -460,5 +464,7 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
   }
   if (!widgets.length) widgets.push('tasks')
 
-  return { version: 2, lists, habits, habitLogs, focusSessions, preferences, widgets }
+  const memos = normalizeMemos(record.memos)
+
+  return { version: 2, lists, habits, habitLogs, focusSessions, memos, preferences, widgets }
 }

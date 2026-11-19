@@ -120,7 +120,7 @@ describe('clampReminderMinutes', () => {
 
 describe('page navigation mapping', () => {
   it('maps every page key to its index and back', () => {
-    expect(PAGE_KEYS).toEqual(['tasks', 'calendar', 'habits', 'pomodoro'])
+    expect(PAGE_KEYS).toEqual(['tasks', 'calendar', 'habits', 'pomodoro', 'memos'])
     PAGE_KEYS.forEach((key, index) => {
       expect(pageIndex(key)).toBe(index)
       expect(pageKey(index)).toBe(key)

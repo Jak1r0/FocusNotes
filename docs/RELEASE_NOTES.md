@@ -1,5 +1,84 @@
 # FocusNotes 发布说明
 
+## 0.1.1（Windows / Android）
+
+发布日期：2026-11-19
+
+| 平台 | 版本号 | 说明 |
+| --- | --- | --- |
+| Windows | 0.1.1 | 安装包目录 `apps/desktop/release-011c` |
+| Android | 0.1.1（versionCode 2） | 可从 0.1.0 覆盖安装 |
+| 核心包 `@focusnotes/core` | 0.1.1 | 新增备忘录、同步载荷、Gitee 与小组件布局模块 |
+
+### 主要变更
+
+#### 备忘录
+
+- 桌面与 Android 新增备忘录视图，支持置顶、搜索、长文本（单条 5 万字符，最多 500 条）。
+- 备忘录写入 `WorkspaceExtras.memos`，旧数据自动兼容。
+- 桌面导航与 Android 分页新增「备忘录」入口。
+
+#### Gitee 云同步
+
+- 新增 `createGiteeSync()`：基于 Gitee OpenAPI 的 pull / push / test，读写仓库中的 JSON 文件。
+- 新增 `SyncPayload` 与 `mergeSyncPayload()`：同步待办与附属数据（清单、习惯打卡、专注记录、备忘录），偏好以远端为准。
+- 桌面令牌通过 Electron `safeStorage` 加密后落盘，设置页新增 Gitee 配置面板。
+- 启动时拉取并合并远端数据，本地修改后约 3 秒防抖提交。
+- 移动端令牌保存在 AsyncStorage 应用私有存储中。
+
+#### Android 小组件
+
+- 新增 1x1、1x2、2x2、2x4 四种尺寸 Provider 与布局。
+- 新增 `pickWidgetLayout()` 与 `widget_info_*` 配置，按占位格数选择布局。
+- 统一刷新逻辑，按尺寸渲染今日计数、首条待办、方形列表或完整列表。
+
+#### 其他
+
+- 桌面新增 `app:version` 与 `ui:set-zoom` IPC，设置页显示版本并支持界面缩放。
+- 默认隐藏「搜索」导航项，可在设置中重新开启。
+- 新增 `memo-sync.test.ts`（12 项用例），核心包测试共 43 项。
+
+### 修复内容
+
+- Gitee base64 编码改为纯 JS UTF-8 实现，避免 React Native/Hermes 缺少 `TextEncoder`、`btoa`、`atob` 时运行时崩溃。
+- Gitee contents 路径改为按路径段编码并用 `/` 连接，避免 `%2F` 被服务端误判为字面量。
+- 签名默认 keystore 路径修正为 `focusnotes-release.jks`，避免解析到 `app/app/...`。
+- Android APK 继续启用 v2 / v3 / v4 签名，并输出 `.idsig`。
+
+### 兼容性
+
+- **数据格式**：`extras` 新增 `memos` 字段，旧数据可正常读取；0.1.0 读取新备份时会忽略备忘录。
+- **Android**：`versionCode` 为 2，可从 0.1.0 覆盖安装；从 2.x 版本升级仍需卸载重装。
+- **Gitee**：同步文件格式版本为 1，仅写入用户自己的仓库。
+- **容量限制**：备忘录最多 500 条、单条 5 万字符；Gitee 以整文件提交，多设备并发可能冲突。
+
+### 升级注意事项
+
+1. 升级前导出 JSON 备份。
+2. Android 0.1.0 → 0.1.1 可直接覆盖；2.x → 0.1.1 需先卸载。
+3. Gitee 私人令牌需要仓库 contents 读写权限；桌面端加密保存，移动端保存在应用私有存储。
+4. 多设备同步前先拉取最新数据，避免同时提交造成冲突。
+5. Windows 覆盖安装保留本地数据。
+
+### 已知限制
+
+- Android 习惯提醒时间当前仅保存，不发送本地通知。
+- Gitee 同步为整文件覆盖，冲突时需要重新拉取后再提交。
+- Windows 安装包未做代码签名。
+- R8 代码混淆与资源压缩尚未启用。
+
+### 验证记录
+
+本次发布前已执行：
+
+```powershell
+npm run typecheck   # core / desktop / mobile 均通过
+npm test            # 3 个测试文件，43 项用例通过
+npm run build       # core 与 desktop 构建通过
+npm run dist -w @focusnotes/desktop  # 生成 Setup 0.1.1
+gradlew assembleRelease  # APK 0.1.1，v2/v3/v4 签名
+```
+
 ## 0.1.0（Windows / Android）
 
 发布日期：2026-11-19

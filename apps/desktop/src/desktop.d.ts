@@ -118,7 +118,13 @@ declare global {
         read(): Promise<WorkspaceDocument>
         write(data: { todos: unknown[]; extras: WorkspaceExtras }): Promise<{ ok: boolean; error?: string; count?: number }>
       }
-      profile: {
+      appVersion(): Promise<string>
+  setZoom(value: number): Promise<number>
+  gitee: {
+    get(): Promise<{ owner: string; repo: string; branch: string; path: string; token: string } | null>
+    set(config: { owner: string; repo: string; branch: string; path?: string; token: string }): Promise<{ ok: boolean; encrypted?: boolean; message?: string }>
+  }
+  profile: {
         read(): Promise<{ profile: { id: string; name: string }; todos: unknown[]; extras?: WorkspaceExtras | null }>
         write(raw: string): Promise<{ ok: boolean; error?: string; count?: number }>
         list(): Promise<ProfileList>

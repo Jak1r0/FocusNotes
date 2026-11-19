@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Animated, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, useColorScheme } from 'react-native'
+import { Alert, Animated, Easing, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, TextInput, useColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Slider from '@react-native-community/slider'
 import PagerView, { type PagerViewOnPageScrollEvent, type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
-import { CalendarDays, Check, Cloud, Database, Flame, ListTodo, Plus, Upload, Download, Pencil, Settings, Timer } from 'lucide-react-native'
+import { CalendarDays, Check, Cloud, Database, Flame, ListTodo, NotebookPen, Plus, Upload, Download, Pencil, Settings, Timer } from 'lucide-react-native'
 import {
+  buildSyncPayload,
   clampReminderMinutes,
   createDefaultExtras,
+  createGiteeSync,
+  mergeSyncPayload,
+  type GiteeConfig,
   dateKey,
   habitStreak,
   isHabitScheduled,
@@ -27,6 +31,7 @@ import {
   type WorkspaceExtras,
 } from '@focusnotes/core'
 import { SmartComposer } from './src/components/SmartComposer'
+import { MemosView } from './src/components/MemosView'
 import { TodoItemCard } from './src/components/TodoItemCard'
 import { EditTodoModal } from './src/components/EditTodoModal'
 import { CalendarView } from './src/components/CalendarView'
@@ -50,7 +55,7 @@ const storage = {
 }
 
 type Filter = 'all' | Quadrant
-type Page = 'tasks' | 'calendar' | 'habits' | 'pomodoro' | 'data'
+type Page = 'tasks' | 'calendar' | 'habits' | 'pomodoro' | 'memos' | 'data'
 type LayoutDensity = 'compact' | 'standard' | 'spacious'
 interface WidgetModule {
   updateTodos(json: string): void
@@ -109,6 +114,7 @@ function documentFromJson(raw: string): DataDocument {
 }
 
 const TAB_COUNT = 5
+const TAB_PADDING = 12
 
 export default function App() {
   const store = useMemo(() => new TodoStore(storage), [])
@@ -124,11 +130,15 @@ export default function App() {
   const [layoutDensity, setLayoutDensity] = useState<LayoutDensity>('standard')
   const [layoutScale, setLayoutScale] = useState(1)
   const [defaultReminderMinutesBefore, setDefaultReminderMinutesBefore] = useState(10)
+  const [gitee, setGitee] = useState<GiteeConfig | null>(null)
+  const [giteeDraft, setGiteeDraft] = useState({ owner: '', repo: '', branch: 'master', token: '' })
+  const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
+  const [syncNote, setSyncNote] = useState('')
   const systemColorScheme = useColorScheme()
   const extrasRef = useRef(extras)
   extrasRef.current = extras
   const pagerRef = useRef<PagerView>(null)
-  const tabAnim = useRef(new Animated.Value(0)).current
+  const pillX = useRef(new Animated.Value(0)).current
   const [tabBarWidth, setTabBarWidth] = useState(0)
   const darkMode = extras.preferences.widget.darkMode
   const isDark = darkMode === 'dark' || (darkMode === 'system' && systemColorScheme === 'dark')
@@ -180,7 +190,7 @@ export default function App() {
 
   useEffect(() => {
     const widget = NativeModules.FocusNotesWidget as WidgetModule | undefined
-    const payload = todos.filter((todo) => !todo.completed).slice(0, 3).map((todo) => ({ id: todo.id, title: todo.title, dueAt: todo.dueAt, color: QUADRANTS[quadrantOf(todo)].color }))
+    const payload = todos.filter((todo) => !todo.completed && !todo.deleted).slice(0, 12).map((todo) => ({ id: todo.id, title: todo.title, dueAt: todo.dueAt, color: QUADRANTS[quadrantOf(todo)].color }))
     widget?.updateTodos(JSON.stringify(payload))
   }, [todos])
 
@@ -290,12 +300,24 @@ export default function App() {
     })))
   }
 
+  /** 指示条按槽位宽度做原生驱动的补位动画（不逐帧走 JS，滑动结束才动，避免掉帧）。 */
+  function movePill(index: number) {
+    const slot = tabBarWidth > 0 ? (tabBarWidth - TAB_PADDING * 2) / TAB_COUNT : 0
+    if (!slot) return
+    Animated.timing(pillX, {
+      toValue: index * slot,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start()
+  }
+
   function goToPage(next: Page) {
     const wasSettings = page === 'data'
     setPage(next)
-    tabAnim.setValue(pageIndex(next))
     if (next === 'data') return
     const target = pageIndex(next)
+    movePill(target)
     if (wasSettings) {
       // 从设置页返回时 PagerView 刚从 display:none 恢复，等一帧布局完成后再切页。
       requestAnimationFrame(() => pagerRef.current?.setPage(target))
@@ -304,17 +326,121 @@ export default function App() {
     }
   }
 
-  function onPageScroll(event: PagerViewOnPageScrollEvent) {
-    const { position, offset } = event.nativeEvent
-    // 只更新原生驱动的动画值，不触发 React 重渲染——滑动过程保持 60fps。
-    tabAnim.setValue(position + offset)
-  }
-
   function onPageSelected(event: PagerViewOnPageSelectedEvent) {
     const position = event.nativeEvent.position
-    tabAnim.setValue(position)
-    // 用 ref 读取最新 page：设置页打开时忽略分页事件，避免设置页被切走。
+    movePill(position)
+    // 设置页打开时忽略分页事件，避免设置页被切走。
     setPage((current) => resolvePageFromPager(current, position))
+  }
+
+  useEffect(() => {
+    if (tabBarWidth <= 0) return
+    const slot = (tabBarWidth - TAB_PADDING * 2) / TAB_COUNT
+    pillX.setValue(pageIndex(page) * slot)
+    // 只在第一次测量到宽度时定位，后续由 movePill 动画驱动
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tabBarWidth])
+
+  const giteeRef = useRef<GiteeConfig | null>(null)
+  const syncingRef = useRef(false)
+  const skipPushRef = useRef(false)
+  const loadedRef = useRef(false)
+
+  /** 读取已保存的 Gitee 配置。 */
+  useEffect(() => {
+    void AsyncStorage.getItem('focusnotes.gitee')
+      .then((raw) => {
+        if (!raw) return
+        const parsed = JSON.parse(raw) as GiteeConfig
+        if (parsed?.owner && parsed?.repo && parsed?.token) {
+          setGitee(parsed)
+          giteeRef.current = parsed
+          setGiteeDraft({ owner: parsed.owner, repo: parsed.repo, branch: parsed.branch || 'master', token: parsed.token })
+        }
+      })
+      .catch(() => undefined)
+  }, [])
+
+  /** 进入应用先 pull 一次，把远端合并进本地。 */
+  useEffect(() => {
+    if (!gitee || loadedRef.current) return
+    loadedRef.current = true
+    void pullFromGitee()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gitee?.owner, gitee?.repo, gitee?.token])
+
+  async function pullFromGitee() {
+    const config = giteeRef.current
+    if (!config || syncingRef.current) return
+    syncingRef.current = true
+    setSyncState('syncing')
+    try {
+      const api = createGiteeSync(config, fetch)
+      const remote = await api.pull()
+      if (remote) {
+        skipPushRef.current = true
+        const merged = mergeSyncPayload(buildSyncPayload(store.all, extrasRef.current), remote)
+        await store.replace(merged.todos)
+        await saveExtras(merged.extras)
+        setSyncNote(`已合并远端数据（${new Date().toLocaleTimeString('zh-CN')}）`)
+      } else {
+        setSyncNote('远端还没有数据，首次保存后会自动上传')
+      }
+      setSyncState('ok')
+    } catch (reason) {
+      setSyncState('error')
+      setSyncNote(reason instanceof Error ? reason.message : '拉取失败')
+    } finally {
+      syncingRef.current = false
+    }
+  }
+
+  /** 把当前状态提交到 Gitee（一次 commit）。 */
+  async function pushToGitee() {
+    const config = giteeRef.current
+    if (!config || syncingRef.current) return
+    syncingRef.current = true
+    setSyncState('syncing')
+    try {
+      const api = createGiteeSync(config, fetch)
+      await api.push(buildSyncPayload(store.all, extrasRef.current))
+      setSyncState('ok')
+      setSyncNote(`已上传（${new Date().toLocaleTimeString('zh-CN')}）`)
+    } catch (reason) {
+      setSyncState('error')
+      setSyncNote(reason instanceof Error ? reason.message : '上传失败')
+    } finally {
+      syncingRef.current = false
+    }
+  }
+
+  /** 修改后 3 秒防抖提交，短时间连续改动合并成一次 commit。 */
+  useEffect(() => {
+    const config = giteeRef.current
+    if (!config || loading) return
+    if (skipPushRef.current) { skipPushRef.current = false; return }
+    const timer = setTimeout(() => { void pushToGitee() }, 3000)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todos, extras, loading])
+
+  async function saveGiteeConfig() {
+    const owner = giteeDraft.owner.trim()
+    const repo = giteeDraft.repo.trim()
+    const token = giteeDraft.token.trim()
+    if (!owner || !repo || !token) { Alert.alert('配置不完整', '填写 Gitee 用户名、仓库名和私人令牌。'); return }
+    const config: GiteeConfig = { owner, repo, branch: giteeDraft.branch.trim() || 'master', token }
+    setGitee(config)
+    giteeRef.current = config
+    loadedRef.current = false
+    skipPushRef.current = true
+    await AsyncStorage.setItem('focusnotes.gitee', JSON.stringify(config)).catch(() => undefined)
+    try {
+      const ok = await createGiteeSync(config, fetch).test()
+      Alert.alert(ok ? '连接成功' : '连接失败', ok ? '配置已保存，正在同步。' : '请检查用户名、仓库名与令牌权限。')
+    } catch {
+      Alert.alert('连接失败', '无法访问 Gitee，请检查网络。')
+    }
   }
 
   async function saveList(name: string, color: string) {
@@ -405,17 +531,19 @@ export default function App() {
     <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={isDark ? '#171a20' : '#f5f5f7'} />
     <KeyboardAvoidingView style={styles.safe}>
       <View style={styles.header}>
-        <View style={styles.brand}><View style={styles.brandMark}><Check size={14} color="#fff" strokeWidth={3} /></View><Text style={styles.brandText}>FocusNotes</Text></View>
-        <Pressable style={styles.cloudButton} onPress={() => setPage('data')}><Settings size={16} color={isDark ? '#aeb6c2' : '#6e6e73'} /><Text style={styles.cloudText}>设置</Text></Pressable>
+        <Pressable style={styles.brand} onPress={() => setPage('data')} accessibilityLabel="打开设置" accessibilityRole="button">
+          <View style={styles.brandMark}><Check size={14} color="#fff" strokeWidth={3} /><View style={styles.brandGear}><Settings size={8} color="#fff" strokeWidth={3} /></View></View>
+          <Text style={styles.brandText}>FocusNotes</Text>
+        </Pressable>
       </View>
       <View style={[styles.tabsBar, { backgroundColor: pageBg, borderBottomColor: tabBorder }]} onLayout={(event) => setTabBarWidth(event.nativeEvent.layout.width)}>
         {tabBarWidth > 0 && <Animated.View pointerEvents="none" style={[styles.tabPill, {
-          width: tabBarWidth / TAB_COUNT - 8,
+          width: (tabBarWidth - TAB_PADDING * 2) / TAB_COUNT - 8,
           backgroundColor: isDark ? '#1e3a5c' : '#d8eaff',
-          transform: [{ translateX: tabAnim.interpolate({ inputRange: [0, TAB_COUNT - 1], outputRange: [0, (TAB_COUNT - 1) * (tabBarWidth / TAB_COUNT)] }) }],
+          transform: [{ translateX: pillX }],
         }]} />}
         {([
-          ['tasks', ListTodo, '待办'], ['calendar', CalendarDays, '日历'], ['habits', Flame, '习惯'], ['pomodoro', Timer, '专注'], ['data', Settings, '设置'],
+          ['tasks', ListTodo, '待办'], ['calendar', CalendarDays, '日历'], ['habits', Flame, '习惯'], ['pomodoro', Timer, '专注'], ['memos', NotebookPen, '备忘'],
         ] as const).map(([key, Icon, label]) => <Pressable key={key} style={styles.tabSlot} onPress={() => goToPage(key)}>
           <View style={[styles.tabInner, page === key && styles.tabInnerActive]}>
             <Icon size={15} color={page === key ? '#0071e3' : '#6e6e73'} />
@@ -423,7 +551,7 @@ export default function App() {
           </View>
         </Pressable>)}
       </View>
-      <PagerView ref={pagerRef} style={[styles.pager, page === 'data' && styles.pagerHidden]} initialPage={pageIndex(page)} onPageScroll={onPageScroll} onPageSelected={onPageSelected} keyboardDismissMode="on-drag" overdrag={false}>
+      <PagerView ref={pagerRef} style={[styles.pager, page === 'data' && styles.pagerHidden]} initialPage={pageIndex(page)} onPageSelected={onPageSelected} keyboardDismissMode="on-drag" overdrag={false}>
         <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="tasks">
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.round(110 * layoutScale) }]} keyboardShouldPersistTaps="handled">
             <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>此刻，专注。</Text><Text style={styles.subtitle}>{activeCount ? `${activeCount} 项待办，按截止时间有序推进。` : '一切安排妥当，保持从容。'}</Text></View></View>
@@ -492,9 +620,35 @@ export default function App() {
             />
           </ScrollView>
         </View>
+        <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="memos">
+          <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.round(110 * layoutScale) }]} keyboardShouldPersistTaps="handled">
+            <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>随手记下。</Text><Text style={styles.subtitle}>长文字备忘录，随时回看。</Text></View></View>
+            <MemosView
+              memos={extras.memos}
+              onSave={(memo) => run(updateExtras((current) => ({ ...current, memos: [memo, ...(current.memos ?? []).filter((item) => item.id !== memo.id)] })))}
+              onDelete={(id) => run(updateExtras((current) => ({ ...current, memos: (current.memos ?? []).filter((item) => item.id !== id) })))}
+            />
+          </ScrollView>
+        </View>
       </PagerView>
       {page === 'data' && <ScrollView style={styles.settingsOverlay} contentContainerStyle={[styles.content, { paddingBottom: Math.round(100 * layoutScale) }]} keyboardShouldPersistTaps="handled">
         <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>设置，按你的习惯。</Text><Text style={styles.subtitle}>外观、提醒、存储和同步。</Text></View></View>
+          <View style={styles.layoutSettings}>
+            <View><Text style={styles.actionTitle}>Gitee 云同步</Text><Text style={styles.actionHint}>{gitee ? `${gitee.owner}/${gitee.repo} · ${syncState === 'syncing' ? '同步中…' : syncState === 'ok' ? '已连接' : syncState === 'error' ? '同步失败' : '未同步'}` : '填写后自动上传下载，数据存在你自己的 Gitee 私有仓库'}</Text></View>
+            {(['owner', 'repo', 'branch', 'token'] as const).map((field) => <View key={field} style={styles.giteeRow}>
+              <Text style={styles.giteeLabel}>{field === 'owner' ? '用户名' : field === 'repo' ? '仓库' : field === 'branch' ? '分支' : '令牌'}</Text>
+              <TextInput style={styles.giteeInput} value={giteeDraft[field]} autoCapitalize="none" autoCorrect={false}
+                secureTextEntry={field === 'token'} placeholder={field === 'token' ? '在 Gitee 设置里生成，仅本机保存' : field === 'branch' ? 'master' : ''}
+                placeholderTextColor="#8e8d93"
+                onChangeText={(value) => setGiteeDraft((current) => ({ ...current, [field]: value }))} />
+            </View>)}
+            <View style={styles.giteeActions}>
+              <Pressable style={styles.giteeSave} onPress={() => void saveGiteeConfig()}><Text style={styles.giteeSaveText}>保存并连接</Text></Pressable>
+              {gitee && <Pressable style={styles.giteeAction} onPress={() => void pullFromGitee()}><Text style={styles.giteeActionText}>立即拉取</Text></Pressable>}
+              {gitee && <Pressable style={styles.giteeAction} onPress={() => void pushToGitee()}><Text style={styles.giteeActionText}>立即上传</Text></Pressable>}
+            </View>
+            {!!syncNote && <Text style={styles.giteeNote}>{syncNote}</Text>}
+          </View>
           <View style={styles.layoutSettings}>
             <View><Text style={styles.actionTitle}>外观模式</Text><Text style={styles.actionHint}>跟随系统，或手动选择明暗主题</Text></View>
             <View style={styles.optionRow}>{([
@@ -557,12 +711,22 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: '#f5f5f7' },
   header: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  brandGear: { position: 'absolute', right: -3, bottom: -3, width: 13, height: 13, alignItems: 'center', justifyContent: 'center', borderRadius: 7, backgroundColor: '#1d1d1f' },
   brandMark: { width: 26, height: 26, alignItems: 'center', justifyContent: 'center', borderRadius: 8, backgroundColor: '#0071e3' },
   brandText: { color: '#1d1d1f', fontSize: 14, fontWeight: '600', letterSpacing: -.2 },
   cloudButton: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 6 },
   cloudText: { color: '#6e6e73', fontSize: 11 },
   content: { paddingHorizontal: 18, paddingBottom: 100 },
   settingSlider: { width: '100%', height: 40, marginTop: 6 },
+  giteeRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+  giteeLabel: { width: 48, color: '#8e8d93', fontSize: 11 },
+  giteeInput: { flex: 1, minHeight: 40, paddingHorizontal: 12, color: '#1d1d1f', fontSize: 13, borderRadius: 9, backgroundColor: '#f5f5f7' },
+  giteeActions: { flexDirection: 'row', gap: 8, marginTop: 12 },
+  giteeSave: { minHeight: 38, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#0071e3' },
+  giteeSaveText: { color: '#fff', fontSize: 13, fontWeight: '600' },
+  giteeAction: { minHeight: 38, paddingHorizontal: 14, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#f5f5f7' },
+  giteeActionText: { color: '#0071e3', fontSize: 12 },
+  giteeNote: { marginTop: 8, color: '#8e8d93', fontSize: 10 },
   sliderScale: { flexDirection: 'row', justifyContent: 'space-between', color: '#8e8d93', fontSize: 10 },
   contentCompact: { paddingBottom: 76 },
   contentSpacious: { paddingBottom: 120 },
@@ -576,7 +740,7 @@ const styles = StyleSheet.create({
   filters: { gap: 6, paddingVertical: 18 },
   tabsBar: { flexDirection: 'row', position: 'relative', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
   tabSlot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  tabPill: { position: 'absolute', left: 12, top: 10, bottom: 10, marginLeft: 4, borderRadius: 14 },
+  tabPill: { position: 'absolute', left: 16, top: 10, bottom: 10, borderRadius: 14 },
   tabInner: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 8, borderRadius: 14 },
   tabInnerActive: {},
   tabsLayer: { flexGrow: 0 },

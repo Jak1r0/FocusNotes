@@ -1,5 +1,5 @@
 /** 参与左右滑动切换的页面（设置页 data 不参与）。顺序即 PagerView 的页序。 */
-export const PAGE_KEYS = ['tasks', 'calendar', 'habits', 'pomodoro'] as const
+export const PAGE_KEYS = ['tasks', 'calendar', 'habits', 'pomodoro', 'memos'] as const
 
 export type SwipePage = (typeof PAGE_KEYS)[number]
 

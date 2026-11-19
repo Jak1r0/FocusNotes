@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, Notification, dialog, shell, net, screen } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, Notification, dialog, shell, net, screen, safeStorage } = require('electron')
 const path = require('node:path')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
@@ -1033,6 +1033,43 @@ function registerIpc() {
       return { ok: false, message: '文件无法解析，请选择 FocusNotes 导出的数据文件。' }
     }
   })
+
+/* ── Gitee 同步配置：令牌用 safeStorage 加密后落盘 ────────────── */
+function giteeConfigPath() { return path.join(dataDir, 'gitee.json') }
+
+ipcMain.handle('app:version', () => app.getVersion())
+
+ipcMain.handle('ui:set-zoom', (_event, value) => {
+  const zoom = Math.min(1.4, Math.max(0.8, Number(value) || 1))
+  const target = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows()[0]
+  if (target && !target.isDestroyed()) target.webContents.setZoomFactor(zoom)
+  return zoom
+})
+
+ipcMain.handle('gitee:get', () => {
+  try {
+    const raw = JSON.parse(fs.readFileSync(giteeConfigPath(), 'utf8'))
+    let token = ''
+    if (raw.token && safeStorage.isEncryptionAvailable()) {
+      try { token = safeStorage.decryptString(Buffer.from(raw.token, 'base64')) } catch { token = '' }
+    }
+    return { owner: raw.owner || '', repo: raw.repo || '', branch: raw.branch || 'master', path: raw.path || 'focusnotes/data.json', token }
+  } catch { return null }
+})
+
+ipcMain.handle('gitee:set', (_event, config) => {
+  try {
+    const record = {
+      owner: String(config?.owner || '').trim(),
+      repo: String(config?.repo || '').trim(),
+      branch: String(config?.branch || 'master').trim() || 'master',
+      path: String(config?.path || 'focusnotes/data.json').trim() || 'focusnotes/data.json',
+      token: safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(String(config?.token || '')).toString('base64') : '',
+    }
+    writeJson(giteeConfigPath(), record)
+    return { ok: true, encrypted: safeStorage.isEncryptionAvailable() }
+  } catch (error) { return { ok: false, message: String(error) } }
+})
 
   ipcMain.handle('profile:reveal', async () => {
     ensureProfileDir()
