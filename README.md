@@ -41,7 +41,7 @@ FocusNotes 是一款面向 Windows 和 Android 的任务管理与专注工具，
 
 升级时请使用与已安装版本相同的签名。若更换签名，Android 会拒绝覆盖安装，请先导出备份再卸载重装。
 
-发布 APK 使用 APK Signature Scheme v2 / v3 / v4 签名，并提供 v4 的 `.idsig` 附属文件用于增量安装。
+发布 APK 内嵌 APK Signature Scheme v1 / v2 / v3 签名，单文件即可完成签名校验与覆盖安装；本版本不再附带 `.idsig`。签名证书与 0.1.0 相同（SHA-256 `7a85…`），`versionCode` 2 可直接覆盖 0.1.0。
 
 > 注意：0.1.1 的 `versionCode` 为 2，可从 0.1.0 直接覆盖安装。若仍在使用 2.x 版本，请先导出 JSON 备份、卸载旧版后再安装。
 
@@ -131,7 +131,7 @@ FN_RELEASE_KEY_PASSWORD=你的密码
 
 `FN_RELEASE_STORE_FILE` 的相对路径以 `apps/mobile/android/app` 为基准，也可填写绝对路径。签名文件默认放在 `apps/mobile/android/app/focusnotes-release.jks`，不应提交到仓库。
 
-构建脚本显式启用 v1/v2/v3/v4 签名方案；其中 v1 在 `minSdk 24` 下可能不生成，实际以 v2/v3/v4 为准。
+构建脚本启用 v1/v2/v3 签名方案并禁用 v4；Release 只发布一个自包含 APK，不提供 `.idsig`。
 
 ## 测试与检查
 

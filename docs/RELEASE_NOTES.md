@@ -43,19 +43,20 @@
 - Gitee base64 编码改为纯 JS UTF-8 实现，避免 React Native/Hermes 缺少 `TextEncoder`、`btoa`、`atob` 时运行时崩溃。
 - Gitee contents 路径改为按路径段编码并用 `/` 连接，避免 `%2F` 被服务端误判为字面量。
 - 签名默认 keystore 路径修正为 `focusnotes-release.jks`，避免解析到 `app/app/...`。
-- Android APK 继续启用 v2 / v3 / v4 签名，并输出 `.idsig`。
+- Android APK 改为内嵌 v1 / v2 / v3 签名并禁用 v4，不再单独发布 `.idsig`；单 APK 即可完成签名校验与覆盖安装。签名证书与 0.1.0 一致（SHA-256 `7a85…`）。
 
 ### 兼容性
 
 - **数据格式**：`extras` 新增 `memos` 字段，旧数据可正常读取；0.1.0 读取新备份时会忽略备忘录。
 - **Android**：`versionCode` 为 2，可从 0.1.0 覆盖安装；从 2.x 版本升级仍需卸载重装。
+- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`，与 0.1.0 相同；不再提供 `.idsig`。
 - **Gitee**：同步文件格式版本为 1，仅写入用户自己的仓库。
 - **容量限制**：备忘录最多 500 条、单条 5 万字符；Gitee 以整文件提交，多设备并发可能冲突。
 
 ### 升级注意事项
 
 1. 升级前导出 JSON 备份。
-2. Android 0.1.0 → 0.1.1 可直接覆盖；2.x → 0.1.1 需先卸载。
+2. Android 0.1.0 → 0.1.1 使用相同证书且 `versionCode` 更高，可直接覆盖；若系统仍提示签名冲突，说明设备上的安装包不是同证书版本（如旧 2.x 或第三方重签包），需先卸载再安装。
 3. Gitee 私人令牌需要仓库 contents 读写权限；桌面端加密保存，移动端保存在应用私有存储。
 4. 多设备同步前先拉取最新数据，避免同时提交造成冲突。
 5. Windows 覆盖安装保留本地数据。
@@ -76,7 +77,7 @@ npm run typecheck   # core / desktop / mobile 均通过
 npm test            # 3 个测试文件，43 项用例通过
 npm run build       # core 与 desktop 构建通过
 npm run dist -w @focusnotes/desktop  # 生成 Setup 0.1.1
-gradlew assembleRelease  # APK 0.1.1，v2/v3/v4 签名
+gradlew assembleRelease  # APK 0.1.1，v1/v2/v3 内嵌签名，无 .idsig
 ```
 
 ## 0.1.0（Windows / Android）
