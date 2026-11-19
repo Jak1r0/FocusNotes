@@ -2,12 +2,6 @@
 
 FocusNotes 是一款面向 Windows 和 Android 的任务管理与专注工具，帮助你把待办、日程、习惯和专注时间放在一个轻量的工作空间里。
 
-## 本次发布
-
-- **Windows 2.4.0**：新增「今日完成」聚合、10 种环境音与睡眠定时、习惯每日提醒。
-- **Android 2.7.0**：新增左右滑动分页、滑块式外观与提醒设置、任务提醒自定义分钟数。
-
-完整变更、兼容性与升级步骤见 [发布说明](docs/RELEASE_NOTES.md)。
 
 ## 功能
 
@@ -141,7 +135,10 @@ FocusNotes 默认将工作数据保存在设备本地。Android 云盘同步通�
 
 ## 变更说明
 
-- [发布说明 2.4.0 / 2.7.0](docs/RELEASE_NOTES.md)
+发布说明已迁移至 GitHub Releases：
+
+- [最新版本与下载](https://github.com/Jak1r0/FocusNotes/releases/latest)
+- [仓库内归档：发布说明 2.4.0 / 2.7.0](docs/RELEASE_NOTES.md)
 
 ## 版本
 
