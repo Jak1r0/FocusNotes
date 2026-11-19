@@ -430,6 +430,7 @@ export default function App() {
   </div>
 
   const profilesDialog = profilesOpen && ws.profiles && <ProfileDialog
+    anchored
     dir={ws.profiles.dir}
     activeId={ws.profiles.activeId}
     profiles={ws.profiles.profiles}
@@ -507,7 +508,7 @@ export default function App() {
       navOrder={ws.extras.preferences.navOrder}
       navHidden={ws.extras.preferences.navHidden}
     />
-    <Sidebar view={view} todos={todos} lists={lists} onNavigate={setView} onAddList={addList} />
+    <Sidebar view={view} todos={todos} lists={lists} onNavigate={setView} onAddList={addList} profileName={ws.profile.name} onProfile={() => setProfilesOpen(true)} />
     <main className="workspace">
       <TopBar
         title={title}

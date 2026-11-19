@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, useColorScheme } from 'react-native'
+import { Alert, Animated, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, useColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Slider from '@react-native-community/slider'
 import PagerView, { type PagerViewOnPageScrollEvent, type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
@@ -16,6 +16,7 @@ import {
   pageIndex,
   pageKey,
   PAGE_KEYS,
+  resolvePageFromPager,
   QUADRANTS,
   TodoStore,
   toggleHabitLog,
@@ -107,6 +108,8 @@ function documentFromJson(raw: string): DataDocument {
   return parsed as DataDocument
 }
 
+const TAB_COUNT = 5
+
 export default function App() {
   const store = useMemo(() => new TodoStore(storage), [])
   const [todos, setTodos] = useState<TodoItem[]>([])
@@ -125,6 +128,8 @@ export default function App() {
   const extrasRef = useRef(extras)
   extrasRef.current = extras
   const pagerRef = useRef<PagerView>(null)
+  const tabAnim = useRef(new Animated.Value(0)).current
+  const [tabBarWidth, setTabBarWidth] = useState(0)
   const darkMode = extras.preferences.widget.darkMode
   const isDark = darkMode === 'dark' || (darkMode === 'system' && systemColorScheme === 'dark')
   const pageBg = isDark ? '#171a20' : '#f5f5f7'
@@ -286,21 +291,30 @@ export default function App() {
   }
 
   function goToPage(next: Page) {
+    const wasSettings = page === 'data'
     setPage(next)
+    tabAnim.setValue(pageIndex(next))
     if (next === 'data') return
-    pagerRef.current?.setPage(pageIndex(next))
+    const target = pageIndex(next)
+    if (wasSettings) {
+      // 从设置页返回时 PagerView 刚从 display:none 恢复，等一帧布局完成后再切页。
+      requestAnimationFrame(() => pagerRef.current?.setPage(target))
+    } else {
+      pagerRef.current?.setPage(target)
+    }
   }
 
   function onPageScroll(event: PagerViewOnPageScrollEvent) {
     const { position, offset } = event.nativeEvent
-    // 滑动过半即切换高亮，让 tab 跟随手势实时反馈。
-    const next = pageKey(offset > 0.5 ? position + 1 : position)
-    setPage((current) => current === next ? current : next)
+    // 只更新原生驱动的动画值，不触发 React 重渲染——滑动过程保持 60fps。
+    tabAnim.setValue(position + offset)
   }
 
   function onPageSelected(event: PagerViewOnPageSelectedEvent) {
-    const next = pageKey(event.nativeEvent.position)
-    setPage((current) => current === next ? current : next)
+    const position = event.nativeEvent.position
+    tabAnim.setValue(position)
+    // 用 ref 读取最新 page：设置页打开时忽略分页事件，避免设置页被切走。
+    setPage((current) => resolvePageFromPager(current, position))
   }
 
   async function saveList(name: string, color: string) {
@@ -394,14 +408,21 @@ export default function App() {
         <View style={styles.brand}><View style={styles.brandMark}><Check size={14} color="#fff" strokeWidth={3} /></View><Text style={styles.brandText}>FocusNotes</Text></View>
         <Pressable style={styles.cloudButton} onPress={() => setPage('data')}><Settings size={16} color={isDark ? '#aeb6c2' : '#6e6e73'} /><Text style={styles.cloudText}>设置</Text></Pressable>
       </View>
-      <ScrollView style={styles.tabsLayer} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={[
-        styles.tabs, styles.tabsFixed,
-        { paddingVertical: Math.round(12 * layoutScale), backgroundColor: pageBg, borderBottomColor: tabBorder },
-      ]}>
+      <View style={[styles.tabsBar, { backgroundColor: pageBg, borderBottomColor: tabBorder }]} onLayout={(event) => setTabBarWidth(event.nativeEvent.layout.width)}>
+        {tabBarWidth > 0 && <Animated.View pointerEvents="none" style={[styles.tabPill, {
+          width: tabBarWidth / TAB_COUNT - 8,
+          backgroundColor: isDark ? '#1e3a5c' : '#d8eaff',
+          transform: [{ translateX: tabAnim.interpolate({ inputRange: [0, TAB_COUNT - 1], outputRange: [0, (TAB_COUNT - 1) * (tabBarWidth / TAB_COUNT)] }) }],
+        }]} />}
         {([
           ['tasks', ListTodo, '待办'], ['calendar', CalendarDays, '日历'], ['habits', Flame, '习惯'], ['pomodoro', Timer, '专注'], ['data', Settings, '设置'],
-        ] as const).map(([key, Icon, label]) => <Pressable key={key} style={[styles.tab, page === key && styles.tabSelected]} onPress={() => goToPage(key)}><Icon size={15} color={page === key ? '#0071e3' : '#6e6e73'} /><Text style={[styles.tabText, page === key && styles.tabTextSelected]}>{label}</Text></Pressable>)}
-      </ScrollView>
+        ] as const).map(([key, Icon, label]) => <Pressable key={key} style={styles.tabSlot} onPress={() => goToPage(key)}>
+          <View style={[styles.tabInner, page === key && styles.tabInnerActive]}>
+            <Icon size={15} color={page === key ? '#0071e3' : '#6e6e73'} />
+            <Text style={[styles.tabText, page === key && styles.tabTextSelected]}>{label}</Text>
+          </View>
+        </Pressable>)}
+      </View>
       <PagerView ref={pagerRef} style={[styles.pager, page === 'data' && styles.pagerHidden]} initialPage={pageIndex(page)} onPageScroll={onPageScroll} onPageSelected={onPageSelected} keyboardDismissMode="on-drag" overdrag={false}>
         <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="tasks">
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.round(110 * layoutScale) }]} keyboardShouldPersistTaps="handled">
@@ -553,16 +574,18 @@ const styles = StyleSheet.create({
   title: { marginTop: 5, color: '#1d1d1f', fontSize: 32, fontWeight: '600', lineHeight: 38, letterSpacing: -1.1 },
   subtitle: { marginTop: 7, color: '#6e6e73', fontSize: 12, lineHeight: 18 },
   filters: { gap: 6, paddingVertical: 18 },
-  tabs: { gap: 8, paddingVertical: 12 },
+  tabsBar: { flexDirection: 'row', position: 'relative', paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth },
+  tabSlot: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  tabPill: { position: 'absolute', left: 12, top: 10, bottom: 10, marginLeft: 4, borderRadius: 14 },
+  tabInner: { minHeight: 34, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingHorizontal: 8, borderRadius: 14 },
+  tabInnerActive: {},
   tabsLayer: { flexGrow: 0 },
-  tabsFixed: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#e5e5ea', backgroundColor: '#f5f5f7' },
   pager: { flex: 1 },
   pagerHidden: { display: 'none' },
   settingsOverlay: { flex: 1 },
   pagerPage: { flex: 1 },
   tabsCompact: { paddingVertical: 6 },
   tabsSpacious: { paddingVertical: 18 },
-  tab: { minHeight: 40, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 15, borderRadius: 20, backgroundColor: '#ececf0' },
   tabSelected: { backgroundColor: '#fff', shadowColor: '#000', shadowOpacity: .05, shadowRadius: 4, shadowOffset: { width: 0, height: 1 }, elevation: 1 },
   tabText: { color: '#6e6e73', fontSize: 12 },
   tabTextSelected: { color: '#0071e3', fontWeight: '600' },

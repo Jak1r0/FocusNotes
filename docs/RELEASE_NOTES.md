@@ -1,5 +1,87 @@
 # FocusNotes 发布说明
 
+## 2.6.0（Windows）/ 2.9.0（Android）
+
+发布日期：2026-11-19
+
+| 平台 | 版本号 | 说明 |
+| --- | --- | --- |
+| Windows | 2.6.0 | 安装包目录 `apps/desktop/release-260` |
+| Android | 2.9.0（versionCode 9） | `versionName` 与 `versionCode` 已同步递增 |
+| 核心包 `@focusnotes/core` | 1.0.0 | 新增分页事件判定导出 |
+
+### 主要变更
+
+#### 环境音（桌面）
+
+- 白噪音支持多场景混音，最多同时播放 4 种；再次点击已启用场景即可关闭。
+- 新增「风声」「夏夜」，桌面场景扩展到 12 种。
+- 混音时按场景数量均摊子增益（`0.9 / 场景数`），降低叠加爆音风险。
+- 专注页显示当前混音数量，场景按钮支持多选高亮。
+- 新增 wind / night 合成配方与起伏、脉冲包络。
+
+#### Windows 桌面
+
+- 侧栏新增记录档案入口，可直接切换档案；顶部图标栏的档案提示改为引导到侧栏。
+- 档案弹窗支持锚定式布局（`anchored`），与常规模态弹窗区分。
+- 「左侧功能栏」设置移动到更合适的设置分组。
+- 桌面版本号更新为 2.6.0，安装包输出目录改为 `release-260`。
+
+#### Android
+
+- 顶部标签改为动画滑块（Animated pill），滑动时只更新 `Animated.Value`，不再每帧触发 React 重渲染。
+- 从设置页返回业务页时等待一帧布局完成后再调用 `setPage`，避免 PagerView 尺寸未恢复导致跳页失败。
+- 修复设置页打开期间 PagerView 分页事件把 page 改回业务页的问题，新增 `resolvePageFromPager()`。
+- Android 版本号更新为 2.9.0（versionCode 9）。
+
+#### 核心与测试
+
+- 新增 `resolvePageFromPager()`，在设置页打开时忽略分页事件。
+- `features.test.ts` 新增 2 项回归测试，核心包测试共 31 项。
+
+### 修复内容
+
+- 修复白噪音混音后停止或切换场景时，waves/wind 的 interval 与脉冲递归 timeout 未被清理，继续操作已关闭 AudioContext 的问题；现在所有定时器统一登记并在停止、切换、卸载时清理。
+- 修复睡眠定时进入淡出阶段后，关闭定时或重新设定时不恢复主音量、环境音保持静音的问题。
+- 修复点击「停止」后场景仍显示为选中、再次点击行为不符合预期的问题。
+- 修复混音叠加时可能出现的爆音（按场景数均摊增益）。
+- 修复设置页被分页事件切走的回归问题。
+
+### 兼容性
+
+- **数据格式**：本地数据与 JSON 备份结构未变。
+- **Windows**：支持 Windows 10/11 x64；覆盖安装保留数据。
+- **Android**：最低 Android 7.0（API 24），编译/目标 SDK 35；versionCode 9。
+- **版本跨度**：本次从 2.4.0 / 2.7.0 直接更新到 2.6.0 / 2.9.0，中间版本未单独发布。
+- **环境音偏好**：音量与睡眠定时会持久化；当前混音场景集合不持久化，启动后需重新选择。
+- **混音上限**：最多 4 种；选择第 5 种时会自动移除最早选择的场景。
+
+### 升级注意事项
+
+1. 升级前导出 JSON 备份。
+2. Android 覆盖安装必须使用相同签名；更换签名需先备份再卸载重装。
+3. Windows 与 Android 均需授予通知权限；桌面习惯提醒依赖系统通知。
+4. Windows 安装包未做代码签名，SmartScreen 可能提示「未知发布者」。
+5. Android Release 构建继续从 `apps/mobile/android/local.properties` 读取签名；`FN_RELEASE_STORE_FILE` 的相对路径以 `apps/mobile/android/app` 为基准，建议显式配置。
+6. 环境音混音最多 4 种，且不会跨启动恢复。
+
+### 已知限制
+
+- Android 版的习惯提醒时间目前仅保存，不参与本地通知；桌面版已支持习惯每日提醒。
+- Android 自定义提醒输入超过 10080 分钟时，状态值会被钳制，但输入框仍显示原始文本。
+- 桌面端深色模式的日出日落功能仍依赖内置的 OpenWeatherMap Key。
+
+### 验证记录
+
+本次发布前已执行：
+
+```powershell
+npm run typecheck   # core / desktop / mobile 均通过
+npm test            # 2 个测试文件，31 项用例通过
+npm run build       # core 与 desktop 构建通过
+npm run dist -w @focusnotes/desktop  # 生成 Setup 2.6.0
+```
+
 ## 2.4.0（Windows）/ 2.7.0（Android）
 
 发布日期：2026-11-19

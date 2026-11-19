@@ -4,6 +4,7 @@ import {
   pageIndex,
   pageKey,
   PAGE_KEYS,
+  resolvePageFromPager,
   sleepTimerRemaining,
   todayCompletion,
   type FocusSession,
@@ -130,5 +131,22 @@ describe('page navigation mapping', () => {
     expect(pageKey(-1)).toBe(PAGE_KEYS[0])
     expect(pageKey(999)).toBe(PAGE_KEYS[PAGE_KEYS.length - 1])
     expect(pageIndex('data' as never)).toBe(0)
+  })
+})
+
+
+describe('resolvePageFromPager (settings page regression)', () => {
+  it('keeps settings page when a pager event fires while settings is open', () => {
+    // BUG 复现：设置页打开时 PagerView 仍挂载，分页事件曾把 page 改回业务页导致设置闪退
+    for (let position = 0; position < PAGE_KEYS.length; position += 1) {
+      expect(resolvePageFromPager('data', position)).toBe('data')
+    }
+  })
+
+  it('follows pager position for the four swipeable pages', () => {
+    PAGE_KEYS.forEach((key, index) => {
+      expect(resolvePageFromPager(key, index)).toBe(key)
+    })
+    expect(resolvePageFromPager('tasks', 2)).toBe('habits')
   })
 })

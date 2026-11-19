@@ -134,14 +134,15 @@ export function PomodoroView({ preferences, sessions, tasks, timer, completion }
         <section className="card noise-card">
           <div className="section-heading">
             <span><Music2 size={15} /> 白噪音</span>
+            {noise.playing && <span className="noise-mix-hint">{noise.active.length} 种混合</span>}
             {noise.playing && <button className="noise-stop" onClick={noise.stop} aria-label="停止白噪音"><VolumeX size={13} /> 停止</button>}
           </div>
           <div className="noise-grid">
             {noise.scenes.map((item) => (
               <button key={item.id}
-                className={`noise-scene${noise.scene === item.id && noise.playing ? ' active' : ''}`}
-                onClick={() => noise.scene === item.id && noise.playing ? noise.stop() : noise.start(item.id)}
-                title={item.hint}>
+                className={`noise-scene${noise.active.includes(item.id) ? ' active' : ''}`}
+                onClick={() => noise.toggle(item.id)}
+                title={`${item.hint}（可多选混合，最多 4 种）`}>
                 <span className={`noise-icon ${item.icon}`} />
                 <strong>{item.label}</strong>
                 <small>{item.hint}</small>

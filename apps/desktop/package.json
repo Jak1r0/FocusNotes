@@ -1,6 +1,6 @@
 {
   "name": "@focusnotes/desktop",
-  "version": "2.4.0",
+  "version": "2.6.0",
   "private": true,
   "type": "module",
   "description": "\u8de8\u5e73\u53f0\u667a\u80fd\u5f85\u529e\u4fbf\u7b3a",
@@ -34,15 +34,11 @@
     "appId": "com.focusnotes.desktop",
     "productName": "FocusNotes",
     "directories": {
-      "output": "release-240b"
+      "output": "release-260"
     },
     "asar": true,
     "compression": "maximum",
     "npmRebuild": false,
-    "electronLanguages": [
-      "zh-CN",
-      "en-US"
-    ],
     "files": [
       "dist/**/*",
       "electron/**/*",

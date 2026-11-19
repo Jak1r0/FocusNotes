@@ -44,7 +44,7 @@ export function IconRail({ view, theme, profileName, onNavigate, onSearch, onSet
   const handle = (id: NavId) => id === 'search' ? onSearch() : onNavigate(id as ViewId)
   return (
     <nav className="icon-rail" aria-label="主导航">
-      <button className="rail-avatar" onClick={onProfile} title={`记录档案：${profileName}`} aria-label="切换记录档案">
+      <button className="rail-avatar" onClick={onProfile} title={`记录档案：${profileName}（在左上角侧栏展开）`} aria-label="切换记录档案">
         <span>{(profileName || 'F').slice(0, 1).toUpperCase()}</span>
       </button>
       <div className="rail-group">
