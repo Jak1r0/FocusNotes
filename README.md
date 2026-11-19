@@ -27,17 +27,19 @@ FocusNotes 是一款面向 Windows 和 Android 的任务管理与专注工具，
 
 ### Windows
 
-1. 从 [GitHub Releases](https://github.com/Jak1r0/FocusNotes/releases/latest) 下载 `FocusNotes-Setup-2.6.0.exe`。
+1. 从 [GitHub Releases](https://github.com/Jak1r0/FocusNotes/releases/latest) 下载 `FocusNotes-Setup-0.1.0.exe`。
 2. 运行安装包并按提示完成安装；首次启动时允许通知，以便接收待办与习惯提醒。
 3. 覆盖安装会保留本地数据。
 
 ### Android
 
-1. 下载 `FocusNotes-Android-2.9.0.apk`。
+1. 下载 `FocusNotes-Android-0.1.0.apk`。
 2. 按系统提示允许从当前来源安装应用。
 3. 首次启动时授予通知权限；需要提醒和主屏幕小组件时，同时允许自启动与后台运行。
 
 升级时请使用与已安装版本相同的签名。若更换签名，Android 会拒绝覆盖安装，请先导出备份再卸载重装。
+
+> 注意：0.1.0 将 Android `versionCode` 重置为 1。已安装此前 2.x 版本的设备无法直接覆盖安装，请先导出 JSON 备份，卸载旧版后再安装 0.1.0。
 
 ## 配置
 
@@ -137,8 +139,8 @@ FocusNotes 默认将工作数据保存在设备本地。Android 云盘同步通�
 发布说明已迁移至 GitHub Releases：
 
 - [最新版本与下载](https://github.com/Jak1r0/FocusNotes/releases/latest)
-- [仓库内归档：发布说明 2.6.0 / 2.9.0（含 2.4.0 历史）](docs/RELEASE_NOTES.md)
+- [仓库内归档：发布说明 0.1.0](docs/RELEASE_NOTES.md)
 
 ## 版本
 
-本次发布包含 Windows 版 **2.6.0** 和 Android 版 **2.9.0**。两个平台独立维护版本号。
+当前 Windows 与 Android 统一使用 **0.1.0**。此前的 2.x 版本号已停用，历史 Release 已清理；0.1.0 作为版本号重置后的首个版本。
