@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clampReminderMinutes,
+  normalizeExtras,
   pageIndex,
   pageKey,
   PAGE_KEYS,
@@ -148,5 +149,27 @@ describe('resolvePageFromPager (settings page regression)', () => {
       expect(resolvePageFromPager(key, index)).toBe(key)
     })
     expect(resolvePageFromPager('tasks', 2)).toBe('habits')
+  })
+})
+
+
+describe('normalizeExtras navigation backfill', () => {
+  it('inserts newly added nav items right after 今天 instead of appending to the end', () => {
+    const legacy = {
+      version: 2, lists: [], habits: [], habitLogs: {}, focusSessions: [], memos: [],
+      preferences: { navOrder: ['today', 'pomodoro', 'habits'], navHidden: [] },
+    }
+    const out = normalizeExtras(legacy as never)
+    const order = out.preferences.navOrder
+    expect(order[0]).toBe('today')
+    expect(order).toContain('memos')
+    // 新增项应紧跟 today，而不是被追加到末尾
+    expect(order.indexOf('memos')).toBe(1)
+  })
+
+  it('defaults to hiding the search entry for legacy data', () => {
+    const legacy = { version: 2, preferences: { navHidden: [] } }
+    const out = normalizeExtras(legacy as never)
+    expect(out.preferences.navHidden).toContain('search')
   })
 })

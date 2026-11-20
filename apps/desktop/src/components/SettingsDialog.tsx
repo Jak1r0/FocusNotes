@@ -227,19 +227,23 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <div className="settings-group">
                 <span className="settings-label"><LayoutGrid size={12} /> 左侧功能栏</span>
                 <div className="nav-list">
-                  {props.preferences.navOrder.map((id, index) => {
+                  {(() => {
+                    const full = NAV_ITEMS.map((item) => item.id)
+                    const ordered = [...props.preferences.navOrder.filter((id) => full.includes(id)), ...full.filter((id) => !props.preferences.navOrder.includes(id))]
+                    return ordered
+                  })().map((id, index, list) => {
                     const meta = NAV_ITEMS.find((item) => item.id === id)
                     const hidden = props.preferences.navHidden.includes(id)
                     return <div key={id} className={`nav-row${hidden ? ' hidden' : ''}`}>
                       <button className="mini-action" disabled={index === 0}
                         onClick={() => {
-                          const next = [...props.preferences.navOrder]
+                          const next = [...list]
                           ;[next[index - 1], next[index]] = [next[index]!, next[index - 1]!]
                           props.onNavigation({ navOrder: next })
                         }} aria-label="上移"><ArrowUp size={11} /></button>
-                      <button className="mini-action" disabled={index === props.preferences.navOrder.length - 1}
+                      <button className="mini-action" disabled={index === list.length - 1}
                         onClick={() => {
-                          const next = [...props.preferences.navOrder]
+                          const next = [...list]
                           ;[next[index], next[index + 1]] = [next[index + 1]!, next[index]!]
                           props.onNavigation({ navOrder: next })
                         }} aria-label="下移"><ArrowDown size={11} /></button>

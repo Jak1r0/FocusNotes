@@ -42,7 +42,12 @@ const NAV_DEFS: Record<NavId, { id: NavId; label: string; icon: typeof CalendarD
 
 export function IconRail({ view, theme, profileName, onNavigate, onSearch, onSettings, onProfile, onToggleTheme, navOrder, navHidden }: IconRailProps) {
   const isActive = (id: ViewId) => view === id || (id === 'today' && (view === 'recent' || view === 'inbox' || view.startsWith('list:') || view.startsWith('tag:')))
-  const items = navOrder.filter((id) => !navHidden.includes(id)).map((id) => NAV_DEFS[id]).filter(Boolean)
+  // 渲染层兜底：navOrder 缺失的导航项也要显示，避免旧数据导致新功能不可见。
+  const orderedNav = [
+    ...navOrder.filter((id) => NAV_DEFS[id]),
+    ...(Object.keys(NAV_DEFS) as NavId[]).filter((id) => !navOrder.includes(id)),
+  ]
+  const items = orderedNav.filter((id) => !navHidden.includes(id)).map((id) => NAV_DEFS[id]).filter(Boolean)
   const handle = (id: NavId) => id === 'search' ? onSearch() : onNavigate(id as ViewId)
   return (
     <nav className="icon-rail" aria-label="主导航">

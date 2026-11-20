@@ -131,7 +131,7 @@ export default function App() {
   const [layoutScale, setLayoutScale] = useState(1)
   const [defaultReminderMinutesBefore, setDefaultReminderMinutesBefore] = useState(10)
   const [gitee, setGitee] = useState<GiteeConfig | null>(null)
-  const [giteeDraft, setGiteeDraft] = useState({ owner: '', repo: '', branch: 'master', token: '' })
+  const [giteeDraft, setGiteeDraft] = useState({ owner: '', repo: '', branch: 'master', path: 'focusnotes/data.json', token: '' })
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
   const [syncNote, setSyncNote] = useState('')
   const systemColorScheme = useColorScheme()
@@ -355,7 +355,7 @@ export default function App() {
         if (parsed?.owner && parsed?.repo && parsed?.token) {
           setGitee(parsed)
           giteeRef.current = parsed
-          setGiteeDraft({ owner: parsed.owner, repo: parsed.repo, branch: parsed.branch || 'master', token: parsed.token })
+          setGiteeDraft({ owner: parsed.owner, repo: parsed.repo, branch: parsed.branch || 'master', path: parsed.path || 'focusnotes/data.json', token: parsed.token })
         }
       })
       .catch(() => undefined)
@@ -429,7 +429,7 @@ export default function App() {
     const repo = giteeDraft.repo.trim()
     const token = giteeDraft.token.trim()
     if (!owner || !repo || !token) { Alert.alert('配置不完整', '填写 Gitee 用户名、仓库名和私人令牌。'); return }
-    const config: GiteeConfig = { owner, repo, branch: giteeDraft.branch.trim() || 'master', token }
+    const config: GiteeConfig = { owner, repo, branch: giteeDraft.branch.trim() || 'master', token, path: giteeDraft.path.trim() || 'focusnotes/data.json' }
     setGitee(config)
     giteeRef.current = config
     loadedRef.current = false
@@ -635,10 +635,10 @@ export default function App() {
         <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>设置，按你的习惯。</Text><Text style={styles.subtitle}>外观、提醒、存储和同步。</Text></View></View>
           <View style={styles.layoutSettings}>
             <View><Text style={styles.actionTitle}>Gitee 云同步</Text><Text style={styles.actionHint}>{gitee ? `${gitee.owner}/${gitee.repo} · ${syncState === 'syncing' ? '同步中…' : syncState === 'ok' ? '已连接' : syncState === 'error' ? '同步失败' : '未同步'}` : '填写后自动上传下载，数据存在你自己的 Gitee 私有仓库'}</Text></View>
-            {(['owner', 'repo', 'branch', 'token'] as const).map((field) => <View key={field} style={styles.giteeRow}>
-              <Text style={styles.giteeLabel}>{field === 'owner' ? '用户名' : field === 'repo' ? '仓库' : field === 'branch' ? '分支' : '令牌'}</Text>
+            {(['owner', 'repo', 'branch', 'path', 'token'] as const).map((field) => <View key={field} style={styles.giteeRow}>
+              <Text style={styles.giteeLabel}>{field === 'owner' ? '用户名' : field === 'repo' ? '仓库' : field === 'branch' ? '分支' : field === 'path' ? '路径' : '令牌'}</Text>
               <TextInput style={styles.giteeInput} value={giteeDraft[field]} autoCapitalize="none" autoCorrect={false}
-                secureTextEntry={field === 'token'} placeholder={field === 'token' ? '在 Gitee 设置里生成，仅本机保存' : field === 'branch' ? 'master' : ''}
+                secureTextEntry={field === 'token'} placeholder={field === 'token' ? '在 Gitee 设置里生成，仅本机保存' : field === 'branch' ? 'master' : field === 'path' ? 'focusnotes/data.json' : ''}
                 placeholderTextColor="#8e8d93"
                 onChangeText={(value) => setGiteeDraft((current) => ({ ...current, [field]: value }))} />
             </View>)}

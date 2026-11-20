@@ -25,7 +25,7 @@ export function normalizeMemos(value: unknown, now = new Date()): Memo[] {
     if (!id || seen.has(id)) continue
     const title = text(record.title, 200).trim()
     const content = text(record.content, MEMO_CONTENT_LIMIT)
-    if (!title && !content) continue
+    // 只以 id 作为有效性判据：新建后尚未填写的空白备忘录必须保留，否则点「新建」会立刻消失。
     seen.add(id)
     const createdAt = typeof record.createdAt === 'string' && Number.isFinite(Date.parse(record.createdAt)) ? record.createdAt : fallbackTime
     const updatedAt = typeof record.updatedAt === 'string' && Number.isFinite(Date.parse(record.updatedAt)) ? record.updatedAt : createdAt

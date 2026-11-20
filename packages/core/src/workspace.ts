@@ -431,7 +431,9 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
   const snap = widgetPref.snap
   const validNav = NAV_ITEMS.map((item) => item.id)
   const rawOrder = Array.isArray(prefRecord.navOrder) ? prefRecord.navOrder.filter((id): id is NavId => validNav.includes(id as NavId)) : []
-  const navOrder = [...new Set([...rawOrder, ...validNav.filter((id) => !rawOrder.includes(id))])]
+  // 补齐新增导航项时插到「今天」之后，避免被追加到列表末尾而看不见。
+  const missing = validNav.filter((id) => !rawOrder.includes(id))
+  const navOrder = [...new Set([...rawOrder.slice(0, 1), ...missing, ...rawOrder.slice(1)])]
   // 搜索按钮默认隐藏：旧数据里 navHidden 为空时也套用此默认，用户可在设置里重新开启。
   const navHidden = Array.isArray(prefRecord.navHidden) && prefRecord.navHidden.length > 0
     ? [...new Set(prefRecord.navHidden.filter((id): id is NavId => validNav.includes(id as NavId)))]

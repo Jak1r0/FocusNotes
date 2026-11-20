@@ -53,6 +53,13 @@ describe('normalizeMemos', () => {
     expect(result[0]!.pinned).toBe(true)
   })
 
+  it('keeps a freshly created blank memo so it can be filled in later', () => {
+    const result = normalizeMemos([memo({ id: 'draft', title: '', content: '' })])
+    expect(result).toHaveLength(1)
+    expect(result[0]!.id).toBe('draft')
+    expect(result[0]!.title).toBe('无标题')
+  })
+
   it('returns empty array for non-array input', () => {
     expect(normalizeMemos(null)).toEqual([])
     expect(normalizeMemos({})).toEqual([])
@@ -163,6 +170,27 @@ describe('createGiteeSync', () => {
     expect(second.created).toBe(false)
     expect(calls[1]!.method).toBe('PUT')
     expect(calls[1]!.body.sha).toBe('sha-1')
+  })
+
+  it('round-trips Chinese and emoji through base64 without TextEncoder', async () => {
+    const payload = buildSyncPayload(
+      [todo({ title: '写周报 📝' })],
+      { ...createDefaultExtras(), memos: [memo({ title: '会议纪要', content: '讨论了同步方案，结论：走 Gitee API。' })] },
+      new Date('2026-11-19T08:00:00.000Z'),
+    )
+    let sent = ''
+    const fetcher = (async (_url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET'
+      if (method === 'GET') return new Response('', { status: 404 })
+      sent = String(JSON.parse(String(init?.body ?? '{}')).content ?? '')
+      return new Response(JSON.stringify({ content: { sha: 's' } }), { status: 201 })
+    }) as unknown as typeof fetch
+
+    await createGiteeSync({ owner: 'o', repo: 'r', branch: 'master', token: 't' }, fetcher).push(payload)
+    const decoded = dec(sent)
+    expect(decoded).toContain('写周报 📝')
+    expect(decoded).toContain('讨论了同步方案')
+    expect(JSON.parse(decoded).extras.memos[0].title).toBe('会议纪要')
   })
 
   it('throws a typed error on server failure', async () => {

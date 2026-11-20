@@ -34,7 +34,7 @@
     "appId": "com.focusnotes.desktop",
     "productName": "FocusNotes",
     "directories": {
-      "output": "release-011c"
+      "output": "release-011e"
     },
     "asar": true,
     "compression": "maximum",

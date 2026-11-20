@@ -78,7 +78,8 @@ export function mergeSyncPayload(local: SyncPayload, remote: SyncPayload): SyncP
 
   return {
     version: Math.max(local.version, remote.version),
-    syncedAt: new Date().toISOString(),
+    // 取两端较晚的时间，保证合并是纯函数（同输入必同输出，便于测试与幂等）。
+    syncedAt: local.syncedAt > remote.syncedAt ? local.syncedAt : remote.syncedAt,
     todos: mergeSyncedTodos([...local.todos], [...remote.todos]),
     extras: mergedExtras,
   }
