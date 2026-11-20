@@ -35,13 +35,13 @@ FocusNotes 是一款面向 Windows 和 Android 的任务管理与专注工具，
 
 ### Android
 
-1. 下载 `FocusNotes-Android-0.1.1.apk`。
+1. 下载 `FocusNotes-0.1.1.apk`。
 2. 按系统提示允许从当前来源安装应用。
 3. 首次启动时授予通知权限；需要提醒和主屏幕小组件时，同时允许自启动与后台运行。
 
 升级时请使用与已安装版本相同的签名。若更换签名，Android 会拒绝覆盖安装，请先导出备份再卸载重装。
 
-发布 APK 内嵌 APK Signature Scheme v1 / v2 / v3 签名，单文件即可完成签名校验与覆盖安装；本版本不再附带 `.idsig`。签名证书与 0.1.0 相同（SHA-256 `7a85…`），`versionCode` 2 可直接覆盖 0.1.0。Release 同时提供公钥证书 `FocusNotes-Android-0.1.1-cert.pem` 与 APK SHA-256 校验文件；私钥 keystore 不公开、不上传。
+发布 APK 内嵌 APK Signature Scheme v1 / v2 / v3 签名，单文件即可完成签名校验与覆盖安装；本版本不再附带 `.idsig`。签名证书与 0.1.0 相同（SHA-256 `7a85…`），`versionCode` 2 可直接覆盖 0.1.0。APK SHA-256 为 `4da05deb…`。Release 同时提供公钥证书 `FocusNotes-0.1.1-cert.pem` 与校验文件 `FocusNotes-0.1.1.apk.sha256`；私钥 keystore 不公开、不上传。
 
 > 注意：0.1.1 的 `versionCode` 为 2，可从 0.1.0 直接覆盖安装。若仍在使用 2.x 版本，请先导出 JSON 备份、卸载旧版后再安装。
 
