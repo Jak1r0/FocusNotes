@@ -4,7 +4,6 @@ import {
   QUADRANTS,
   addDays,
   dateKey,
-  getQuadrant,
   habitStreak,
   isHabitScheduled,
   startOfDay,
@@ -12,6 +11,9 @@ import {
   type WidgetKind,
 } from '@focusnotes/core'
 import type { WidgetData } from './desktop'
+import { resolveMotion } from './motion'
+import { GlassBackdrop } from './components/GlassBackdrop'
+import { QUADRANT_GRID_ORDER, QUADRANT_ICONS } from './taskIcons'
 
 const META: Record<WidgetKind, { title: string; icon: typeof ListTodo; view: string }> = {
   tasks: { title: '任务', icon: ListTodo, view: 'today' },
@@ -55,6 +57,7 @@ export function WidgetWindow() {
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const material = data?.appearance.material ?? 'frosted'
 
   useEffect(() => {
     const off = window.focusDesktop?.widget.onData(setData)
@@ -64,11 +67,12 @@ export function WidgetWindow() {
 
   useEffect(() => {
     const appearance = data?.appearance
+    document.documentElement.dataset.motion = resolveMotion(appearance?.motion)
     const root = document.documentElement
     root.style.setProperty('--app-font', appearance?.fontFamily || '')
     root.style.setProperty('--w-scale', String((appearance?.fontSize || 100) / 100))
-    if (appearance?.darkMode && appearance.darkMode !== 'system') root.dataset.theme = appearance.darkMode
-    else delete root.dataset.theme
+    root.style.setProperty('--w-density', `${appearance?.opacity ?? 100}%`)
+    root.style.setProperty('--w-glass-transparency', `${appearance?.glassTransparency ?? 28}%`)
   }, [data?.appearance])
 
   const kinds = useMemo(() => data?.widgets?.length ? data.widgets : (['tasks'] as WidgetKind[]), [data])
@@ -106,9 +110,9 @@ export function WidgetWindow() {
 
   const todayDate = useMemo(() => (data ? startOfDay(new Date(`${data.today}T00:00:00`)) : startOfDay(new Date())), [data])
 
-  return <div className="widget-window">
+  return <div className="widget-window" data-material={material}>
+    {material !== 'classic' && <GlassBackdrop blur={data?.appearance.glassBlur ?? 14} />}
     <header className="widget-grip">
-      <span className="widget-dot" />
       <button className="widget-close" onClick={() => window.focusDesktop?.widget.close()} aria-label="关闭小部件"><X size={10} /></button>
     </header>
 
@@ -138,10 +142,10 @@ export function WidgetWindow() {
             {Array.from({ length: 4 }, (_, index) => {
               const day = addDays(todayDate, index)
               const key = dateKey(day)
-              const items = (data?.items ?? []).filter((item) => item.dueAt && dateKey(item.dueAt) === key)
+              const count = data?.agendaCounts?.[key] ?? 0
               return <div key={key} className={`widget-agenda-row${index === 0 ? ' today' : ''}`}>
                 <span>{index === 0 ? '今天' : `${day.getMonth() + 1}/${day.getDate()}`}</span>
-                <strong>{items.length ? `${items.length} 项` : '空闲'}</strong>
+                <strong>{count ? `${count} 项` : '空闲'}</strong>
               </div>
             })}
           </div>
@@ -149,12 +153,15 @@ export function WidgetWindow() {
 
         if (kind === 'quadrant') return <Section key={kind} kind={kind} onOpen={openView}>
           <div className="widget-quadrants">
-            {(Object.keys(QUADRANTS) as (keyof typeof QUADRANTS)[]).map((quadrant) => (
-              <div key={quadrant} className="widget-quadrant" style={{ borderColor: `${QUADRANTS[quadrant].color}66` }}>
-                <strong>{(data?.items ?? []).filter((item) => getQuadrant(item) === quadrant).length}</strong>
-                <small>{QUADRANTS[quadrant].shortLabel.split(' · ')[1] ?? '其他'}</small>
+            {QUADRANT_GRID_ORDER.map((quadrant) => {
+              const Icon = QUADRANT_ICONS[quadrant]
+              const count = data?.quadrantCounts?.[quadrant] ?? 0
+              const label = QUADRANTS[quadrant].label
+              return <div key={quadrant} className="widget-quadrant" role="img" aria-label={`${label}，${count} 项`} title={label}>
+                <Icon size={16} aria-hidden="true" focusable="false" />
+                <strong>{count}</strong>
               </div>
-            ))}
+            })}
           </div>
         </Section>
 
@@ -166,7 +173,7 @@ export function WidgetWindow() {
               const done = logs.includes(data?.today ?? '')
               const scheduled = isHabitScheduled(habit, todayDate)
               return <div key={habit.id} className="widget-habit">
-                <span>{habit.emoji} {habit.name}</span>
+                <span>{habit.name}</span>
                 <span className="widget-habit-streak">{habitStreak(habit, logs, todayDate)}天</span>
                 <button className={`habit-check${done ? ' done' : ''}`} disabled={!scheduled}
                   onClick={() => void toggleHabit(habit.id, data?.today ?? '')}>{done ? '✓' : scheduled ? '打卡' : '休'}</button>

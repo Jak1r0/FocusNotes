@@ -54,12 +54,8 @@ export interface WidgetItem {
   overdue: boolean
 }
 
-export interface WidgetAppearance {
-  opacity: number
-  darkMode: 'system' | 'light' | 'dark'
-  alwaysOnTop: boolean
-  snap: import('@focusnotes/core').WidgetSnap
-  fontSize: number
+export interface WidgetAppearance extends Pick<import('@focusnotes/core').WidgetPreferences, 'material' | 'opacity' | 'glassTransparency' | 'glassBlur' | 'snap' | 'fontSize'> {
+  motion?: import('./motion').MotionMode
   fontFamily: string
 }
 
@@ -67,6 +63,8 @@ export interface WidgetData {
   today: string
   appearance: WidgetAppearance
   items: WidgetItem[]
+  agendaCounts: Record<string, number>
+  quadrantCounts: Record<import('@focusnotes/core').Quadrant, number>
   widgets: import('@focusnotes/core').WidgetKind[]
   habits: import('@focusnotes/core').Habit[]
   habitLogs: Record<string, string[]>
@@ -88,10 +86,10 @@ declare global {
   interface Window {
     focusDesktop?: {
       minimize(): void
+      glassWallpaper(): Promise<string | null>
       close(): void
       setAlwaysOnTop(value: boolean): void
       setOpacity(value: number): void
-      setEffect(effect: WindowEffect): void
       setMode(mode: 'full' | 'mini'): void
       onWorkspaceChanged(callback: () => void): () => void
       onNavigateView(callback: (view: string) => void): () => void
@@ -108,7 +106,7 @@ declare global {
         toggle(id: string): Promise<{ ok: boolean; error?: string }>
         toggleHabit(habitId: string, day: string): Promise<{ ok: boolean; error?: string }>
         resize(width: number, height: number): void
-        appearance(prefs: import('@focusnotes/core').WidgetPreferences): void
+        appearance(prefs: import('@focusnotes/core').WidgetPreferences & { motion?: import('./motion').MotionMode }): void
         add(title: string): Promise<{ ok: boolean; id?: string; error?: string }>
         openMain(view?: string): void
         close(): void
@@ -116,12 +114,12 @@ declare global {
       }
       workspace: {
         read(): Promise<WorkspaceDocument>
-        write(data: { todos: unknown[]; extras: WorkspaceExtras }): Promise<{ ok: boolean; error?: string; count?: number }>
+        write(data: { profileId: string; todos?: unknown[]; extras?: WorkspaceExtras; requireActive?: boolean }): Promise<{ ok: boolean; error?: string; count?: number }>
       }
       appVersion(): Promise<string>
   setZoom(value: number): Promise<number>
   gitee: {
-    get(): Promise<{ owner: string; repo: string; branch: string; path: string; token: string } | null>
+    get(): Promise<{ owner: string; repo: string; branch: string; path: string; token: string; profileId: string | null } | null>
     set(config: { owner: string; repo: string; branch: string; path?: string; token: string }): Promise<{ ok: boolean; encrypted?: boolean; message?: string }>
   }
   profile: {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useId, useState } from 'react'
 import {
   Bell,
   Check,
@@ -41,13 +41,21 @@ import {
   type WorkspacePreferences,
 } from '@focusnotes/core'
 import type { ThemeMode, WindowEffect } from '../desktop'
+import { PALETTES, type PaletteId } from '../palettes'
+import { MOTION_OPTIONS, resolveMotion, type MotionMode } from '../motion'
 import { GiteePanel } from './GiteePanel'
 
 interface SettingsDialogProps {
   theme: ThemeMode
+  palette: PaletteId
+  dark: boolean
+  onPalette: (palette: PaletteId) => void
+  motion: MotionMode
+  onMotion: (motion: MotionMode) => void
   alwaysOnTop: boolean
   opacity: number
   windowEffect: WindowEffect
+  windowBlur: number
   widgetEnabled: boolean
   remindersEnabled: boolean
   leadMinutes: number
@@ -59,6 +67,7 @@ interface SettingsDialogProps {
   onAlwaysOnTop: (value: boolean) => void
   onOpacity: (value: number) => void
   onWindowEffect: (effect: WindowEffect) => void
+  onWindowBlur: (blur: number) => void
   onWidgetEnabled: (enabled: boolean) => void
   onReminders: (enabled: boolean, leadMinutes: number) => void
   onPreferences: (patch: Partial<WorkspacePreferences>) => void
@@ -84,9 +93,34 @@ const THEMES: { id: ThemeMode; label: string; icon: typeof Sun }[] = [
 
 const EFFECTS: { id: WindowEffect; label: string; hint: string; icon: typeof Sparkles }[] = [
   { id: 'solid', label: '纯色', hint: '清晰稳定', icon: Sparkles },
-  { id: 'frosted', label: '毛玻璃', hint: '亚克力背景虚化', icon: Waves },
-  { id: 'liquid', label: '液态玻璃', hint: '云母光泽与折射', icon: Droplets },
+  { id: 'frosted', label: '毛玻璃', hint: '半透明雾面', icon: Waves },
+  { id: 'liquid', label: '液态玻璃', hint: '半透明渐层与边缘高光', icon: Droplets },
 ]
+
+function EffectPicker({ value, onChange }: { value: WindowEffect; onChange: (effect: WindowEffect) => void }) {
+  return (
+    <div className="effect-grid" role="group" aria-label="窗口质感">
+      {EFFECTS.map(({ id, label, hint, icon: Icon }) => (
+        <button type="button" key={id} className={`effect-card effect-${id}${id === value ? ' active' : ''}`}
+          aria-pressed={id === value} onClick={() => onChange(id)}>
+          <Icon size={16} aria-hidden="true" />
+          <span><strong>{label}</strong><small>{hint}</small></span>
+        </button>
+      ))}
+    </div>
+  )
+}
+
+function BlurControl({ value, onChange }: { value: number; onChange: (blur: number) => void }) {
+  return <label className="settings-row">
+    <span><strong>模糊强度</strong><small>调整壁纸图层的模糊程度</small></span>
+    <div className="range-wrap">
+      <input type="range" min={0} max={32} step={1} value={value} aria-label="模糊强度"
+        onChange={(event) => onChange(Number(event.target.value))} />
+      <output>{value} px</output>
+    </div>
+  </label>
+}
 
 const SNAP_OPTIONS: Array<{ id: WidgetSnap; label: string }> = [
   { id: 'none', label: '自由' },
@@ -117,6 +151,9 @@ const SECTIONS: { id: Section; label: string; icon: typeof Palette }[] = [
 
 export function SettingsDialog(props: SettingsDialogProps) {
   const [section, setSection] = useState<Section>('appearance')
+  const [glassControlsOpen, setGlassControlsOpen] = useState(false)
+  const glassControlsId = useId()
+  const widget = props.preferences.widget
   const [version, setVersion] = useState('0.1.1')
   const [uiScale, setUiScale] = useState(() => {
     const saved = Number(localStorage.getItem('focusnotes.uiScale') ?? 1)
@@ -160,7 +197,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
             <>
               <header className="settings-head"><h2>外观与窗口</h2><p>让 FocusNotes 更符合你的桌面。</p></header>
               <div className="settings-group">
-                <span className="settings-label">主题</span>
+                <span className="settings-label">深浅模式</span>
                 <div className="theme-grid">
                   {THEMES.map((theme) => {
                     const Icon = theme.icon
@@ -173,6 +210,34 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     )
                   })}
                 </div>
+              </div>
+              <div className="settings-group">
+                <span className="settings-label"><Palette size={12} /> 配色方案</span>
+                <div className="palette-grid" role="group" aria-label="配色方案">
+                  {PALETTES.map((palette) => {
+                    const colors = props.dark ? palette.dark : palette.light
+                    const selected = props.palette === palette.id
+                    return <button type="button" key={palette.id} className={`palette-card${selected ? ' active' : ''}`}
+                      aria-pressed={selected} onClick={() => props.onPalette(palette.id)}>
+                      <span className="palette-swatches" aria-hidden="true">
+                        {[colors[0], colors[1], colors[2], colors[5]].map((color) => (
+                          <i key={color} style={{ backgroundColor: color }} />
+                        ))}
+                      </span>
+                      <span>{palette.label}</span>
+                      {selected && <Check size={13} className="palette-check" aria-hidden="true" />}
+                    </button>
+                  })}
+                </div>
+              </div>
+              <div className="settings-group">
+                <label className="settings-row">
+                  <span><strong>动效强度</strong><small>同时跟随系统的减少动画设置</small></span>
+                  <select aria-label="动效强度" value={props.motion}
+                    onChange={(event) => props.onMotion(resolveMotion(event.target.value))}>
+                    {MOTION_OPTIONS.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+                  </select>
+                </label>
               </div>
               <div className="settings-group">
                 <span className="settings-label"><Type size={12} /> 显示字体</span>
@@ -206,17 +271,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
               </div>
               <div className="settings-group">
                 <span className="settings-label">窗口质感</span>
-                <div className="effect-grid">
-                  {EFFECTS.map((effect) => {
-                    const Icon = effect.icon
-                    return (
-                      <button key={effect.id} className={`effect-card effect-${effect.id}${props.windowEffect === effect.id ? ' active' : ''}`} onClick={() => props.onWindowEffect(effect.id)}>
-                        <Icon size={16} />
-                        <span><strong>{effect.label}</strong><small>{effect.hint}</small></span>
-                      </button>
-                    )
-                  })}
-                </div>
+                <EffectPicker value={props.windowEffect} onChange={props.onWindowEffect} />
+                {props.windowEffect !== 'solid' && <BlurControl value={props.windowBlur} onChange={props.onWindowBlur} />}
               </div>
               <div className="settings-group">
                 <label className="settings-row">
@@ -300,41 +356,53 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <header className="settings-head"><h2>桌面小部件</h2><p>独立悬浮小窗，随手完成今天的事。</p></header>
               <div className="settings-group">
                 <label className="settings-row">
-                  <span><strong>显示桌面小部件</strong><small>置顶悬浮窗，快速勾选与添加任务</small></span>
+                  <span><strong>显示桌面小部件</strong><small>桌面浮窗，可被其他应用窗口覆盖</small></span>
                   <button className={`switch${props.widgetEnabled ? ' on' : ''}`} onClick={() => props.onWidgetEnabled(!props.widgetEnabled)} aria-label="显示桌面小部件"><i /></button>
                 </label>
               </div>
               <div className="settings-group">
                 <span className="settings-label"><Palette size={12} /> 小组件外观</span>
-                <label className="settings-row">
-                  <span><strong>不透明度</strong><small>小组件窗口的通透程度</small></span>
+                <EffectPicker value={widget.material === 'classic' ? 'solid' : widget.material}
+                  onChange={(effect) => props.onWidgetPreferences({ material: effect === 'solid' ? 'classic' : effect })} />
+                {widget.material !== 'classic' && <BlurControl value={widget.glassBlur} onChange={(glassBlur) => props.onWidgetPreferences({ glassBlur })} />}
+                {widget.material !== 'classic' && (
+                  <>
+                    <div className="settings-row">
+                      <span><strong>雾面透明度</strong><small>数值越高，背景越通透</small></span>
+                      <button type="button" className="secondary-button" aria-expanded={glassControlsOpen}
+                        aria-controls={glassControlsId} aria-label={`调整雾面透明度，当前 ${widget.glassTransparency}%`}
+                        onClick={() => setGlassControlsOpen((open) => !open)}>
+                        {glassControlsOpen ? '收起' : '调整'} · {widget.glassTransparency}%
+                      </button>
+                    </div>
+                    <div id={glassControlsId} hidden={!glassControlsOpen}>
+                      <label className="settings-row">
+                        <span><strong>透明度</strong></span>
+                        <div className="range-wrap">
+                          <input type="range" min={0} max={100} step={1} value={widget.glassTransparency}
+                            aria-label="雾面透明度" aria-valuetext={`${widget.glassTransparency}%`}
+                            onChange={(event) => props.onWidgetPreferences({ glassTransparency: Number(event.target.value) })} />
+                          <output>{widget.glassTransparency}%</output>
+                        </div>
+                      </label>
+                    </div>
+                  </>
+                )}
+                {widget.material === 'classic' && <label className="settings-row">
+                  <span><strong>底色浓度</strong><small>数值越高，背景底色越实</small></span>
                   <div className="range-wrap">
                     <input type="range" min={20} max={100} step={1} value={props.preferences.widget.opacity}
                       onChange={(event) => props.onWidgetPreferences({ opacity: Number(event.target.value) })} />
                     <output>{props.preferences.widget.opacity}%</output>
                   </div>
-                </label>
+                </label>}
                 <label className="settings-row">
-                  <span><strong>夜间模式</strong><small>小组件独立跟随系统或强制明暗</small></span>
-                  <select value={props.preferences.widget.darkMode}
-                    onChange={(event) => props.onWidgetPreferences({ darkMode: event.target.value as WidgetPreferences['darkMode'] })}>
-                    <option value="system">跟随系统</option>
-                    <option value="light">浅色</option>
-                    <option value="dark">深色</option>
-                  </select>
-                </label>
-                <label className="settings-row">
-                  <span><strong><Type size={12} /> 文字大小</strong><small>小组件整体 UI 缩放</small></span>
+                  <span><strong><Type size={12} /> 文字大小</strong><small>调整小组件的字号</small></span>
                   <div className="range-wrap">
                     <input type="range" min={80} max={140} step={5} value={props.preferences.widget.fontSize}
                       onChange={(event) => props.onWidgetPreferences({ fontSize: Number(event.target.value) })} />
                     <output>{props.preferences.widget.fontSize}%</output>
                   </div>
-                </label>
-                <label className="settings-row">
-                  <span><strong><Pin size={12} /> 窗口置顶</strong><small>始终显示在其他窗口之上</small></span>
-                  <button className={`switch${props.preferences.widget.alwaysOnTop ? ' on' : ''}`}
-                    onClick={() => props.onWidgetPreferences({ alwaysOnTop: !props.preferences.widget.alwaysOnTop })} aria-label="小组件置顶"><i /></button>
                 </label>
               </div>
               <div className="settings-group">

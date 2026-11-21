@@ -3,6 +3,23 @@ const path = require('node:path')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
 const { execFile } = require('node:child_process')
+const { glassWallpaper } = require('./wallpaper.cjs')
+
+const development = !app.isPackaged
+app.setName(development ? 'FocusNotes Dev' : 'FocusNotes')
+app.setPath('userData', path.join(app.getPath('appData'), app.getName()))
+app.setAppUserModelId(development ? 'com.focusnotes.desktop.dev' : 'com.focusnotes.desktop')
+
+if (development) {
+  app.on('browser-window-created', (_event, window) => {
+    window.webContents.on('before-input-event', (event, input) => {
+      if (input.type === 'keyDown' && input.key === 'F12' && !input.isAutoRepeat) {
+        event.preventDefault()
+        window.webContents.toggleDevTools()
+      }
+    })
+  })
+}
 
 /* 只允许一个实例：第二个进程直接退出，并把已有窗口唤到前台。 */
 const gotLock = app.requestSingleInstanceLock()
@@ -17,10 +34,6 @@ if (!gotLock) {
     }
   })
 }
-
-app.setName('FocusNotes')
-app.setPath('userData', path.join(app.getPath('appData'), 'FocusNotes'))
-app.setAppUserModelId('com.focusnotes.desktop')
 
 let mainWindow = null
 let widgetWindow = null
@@ -79,6 +92,8 @@ function profileDocs() {
 
 function saveDoc(doc) { writeJson(path.join(profileDir(), `${doc.id}.json`), doc) }
 
+const MAX_MEMO_LENGTH = 1_000_000
+
 function uniqueName(base, docs) {
   const trimmed = String(base || '').trim().slice(0, 40) || '新记录'
   if (!docs.some((doc) => doc.name === trimmed)) return trimmed
@@ -101,9 +116,14 @@ function ensureProfiles() {
 }
 
 function activeDoc() {
-  const docs = ensureProfiles()
   const meta = readJson(metaPath(), {})
-  return docs.find((doc) => doc.id === meta.activeId) || docs[0]
+  return readProfileDoc(meta.activeId) || ensureProfiles()[0]
+}
+
+function readProfileDoc(id) {
+  if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]+$/.test(id)) return null
+  const doc = readJson(path.join(profileDir(), `${id}.json`), null)
+  return doc?.id === id && Array.isArray(doc.todos) ? doc : null
 }
 
 function setActive(id) { writeJson(metaPath(), { activeId: id }) }
@@ -444,8 +464,7 @@ function startOfDayLocal(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
 }
 
-function widgetData() {
-  const doc = activeDoc()
+function widgetData(doc = activeDoc()) {
   const todos = (doc.todos || []).filter((todo) => todo && !todo.deleted)
   const open = todos.filter((todo) => !todo.completed).sort((a, b) => {
     const left = a.dueAt ? Date.parse(a.dueAt) : Number.POSITIVE_INFINITY
@@ -454,9 +473,28 @@ function widgetData() {
   })
   const extras = doc.extras && typeof doc.extras === 'object' ? doc.extras : {}
   const fontFamily = FONT_FAMILIES[extras.preferences?.font] || FONT_FAMILIES.system
+  const savedMaterial = extras.preferences?.widget?.material
+  const material = widgetMaterials.includes(savedMaterial) ? savedMaterial : 'frosted'
+  const now = new Date()
+  const agendaCounts = Object.fromEntries(Array.from({ length: 4 }, (_, offset) => {
+    const day = new Date(now)
+    day.setDate(day.getDate() + offset)
+    return [localDay(day), 0]
+  }))
+  const quadrantCounts = { 'important-urgent': 0, 'important-not-urgent': 0, 'not-important-urgent': 0, 'not-important-not-urgent': 0 }
+  for (const todo of open) {
+    const quadrant = `${todo.important ? 'important' : 'not-important'}-${todo.urgent ? 'urgent' : 'not-urgent'}`
+    quadrantCounts[quadrant]++
+    if (!todo.dueAt) continue
+    const day = localDay(new Date(todo.dueAt))
+    if (Object.hasOwn(agendaCounts, day)) agendaCounts[day]++
+  }
+  const completion = todayCompletionMain({ todos, extras, now })
   return {
-    today: localDay(),
-    appearance: { ...widgetPrefs, fontFamily },
+    today: localDay(now),
+    appearance: { ...widgetPrefs, fontFamily, material },
+    agendaCounts,
+    quadrantCounts,
     items: open.slice(0, 12).map((todo) => ({
       id: todo.id,
       title: todo.title,
@@ -464,22 +502,22 @@ function widgetData() {
       important: Boolean(todo.important),
       urgent: Boolean(todo.urgent),
       tags: Array.isArray(todo.tags) ? todo.tags : [],
-      overdue: Boolean(todo.dueAt && Date.parse(todo.dueAt) < Date.now()),
+      overdue: Boolean(todo.dueAt && Date.parse(todo.dueAt) < +now),
     })),
     widgets: Array.isArray(extras.widgets) ? extras.widgets : ['tasks'],
     habits: Array.isArray(extras.habits) ? extras.habits : [],
     habitLogs: extras.habitLogs && typeof extras.habitLogs === 'object' ? extras.habitLogs : {},
     openCount: open.length,
-    doneToday: todayCompletionMain({ todos, extras, now: new Date() }).total,
-    completion: todayCompletionMain({ todos, extras, now: new Date() }),
+    doneToday: completion.total,
+    completion,
     countdowns: open.filter((todo) => Array.isArray(todo.tags) && todo.tags.includes('纪念日') && todo.dueAt)
       .slice(0, 3)
       .map((todo) => ({ id: todo.id, title: todo.title, dueAt: todo.dueAt })),
   }
 }
 
-function pushWidgetData() {
-  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('widget:data', widgetData())
+function pushWidgetData(doc) {
+  if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.webContents.send('widget:data', widgetData(doc))
 }
 
 function notifyWorkspaceChanged() {
@@ -499,22 +537,27 @@ const FONT_FAMILIES = {
 
 /* ── 小部件磁吸：桌面边角 / 跟随前台应用窗口 ─────────────── */
 
-const widgetPrefs = { opacity: 100, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100 }
+const widgetMaterials = ['classic', 'frosted', 'liquid']
+const widgetPrefs = { opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full' }
+const initialWidgetSize = { width: 168, height: 216 }
+let widgetSize = initialWidgetSize
 let snapTimer = null
 
 function applyWidgetAppearance(prefs) {
   if (prefs && typeof prefs === 'object') {
     if (Number.isFinite(Number(prefs.opacity))) widgetPrefs.opacity = Math.min(100, Math.max(20, Number(prefs.opacity)))
-    if (['system', 'light', 'dark'].includes(prefs.darkMode)) widgetPrefs.darkMode = prefs.darkMode
-    if (typeof prefs.alwaysOnTop === 'boolean') widgetPrefs.alwaysOnTop = prefs.alwaysOnTop
+    if (typeof prefs.glassTransparency === 'number' && Number.isFinite(prefs.glassTransparency)) {
+      widgetPrefs.glassTransparency = Math.min(100, Math.max(0, Math.round(prefs.glassTransparency)))
+    }
+    if (typeof prefs.glassBlur === 'number' && Number.isFinite(prefs.glassBlur)) {
+      widgetPrefs.glassBlur = Math.min(32, Math.max(0, Math.round(prefs.glassBlur)))
+    }
     if (typeof prefs.snap === 'string') widgetPrefs.snap = prefs.snap
+    if (['full', 'light', 'off'].includes(prefs.motion)) widgetPrefs.motion = prefs.motion
     if (Number.isFinite(Number(prefs.fontSize))) widgetPrefs.fontSize = Math.min(140, Math.max(80, Number(prefs.fontSize)))
   }
   if (!widgetWindow || widgetWindow.isDestroyed()) return
-  widgetWindow.setOpacity(widgetPrefs.opacity / 100)
-  widgetWindow.setAlwaysOnTop(widgetPrefs.alwaysOnTop, 'screen-saver')
-  widgetWindow.webContents.send('widget:appearance', widgetPrefs)
-  applySnap()
+  pushWidgetData()
 }
 
 /** Windows 下通过 PowerShell 读取前台窗口矩形；结果形如 "x,y,w,h"。 */
@@ -532,47 +575,46 @@ function foregroundRect() {
 
 async function applySnap() {
   if (!widgetWindow || widgetWindow.isDestroyed() || widgetPrefs.snap === 'none') return
-  const size = widgetWindow.getSize()
-  const display = screen.getDisplayNearestPoint(widgetWindow.getBounds())
+  const window = widgetWindow
+  const snap = widgetPrefs.snap
+  const display = screen.getDisplayNearestPoint(window.getBounds())
   const area = display.workArea
   const gap = 12
   let x = area.x + gap
   let y = area.y + gap
+  let foreground = null
 
-  if (widgetPrefs.snap === 'follow-app') {
-    const rect = await foregroundRect()
-    if (rect && rect.width > 100 && rect.height > 100 && rect.x > -30000) {
-      const targetX = rect.x + rect.width - size[0] - gap
-      const targetY = rect.y + 4
-      widgetWindow.setBounds({ x: Math.round(targetX), y: Math.round(targetY), width: size[0], height: size[1] })
-      return
-    }
-    x = area.x + area.width - size[0] - gap
-    y = area.y + gap
-  } else if (widgetPrefs.snap === 'top-right' || widgetPrefs.snap === 'top') {
-    x = area.x + area.width - size[0] - gap
-  } else if (widgetPrefs.snap === 'bottom-left' || widgetPrefs.snap === 'bottom-right') {
-    y = area.y + area.height - size[1] - gap
-    if (widgetPrefs.snap === 'bottom-right') x = area.x + area.width - size[0] - gap
+  if (snap === 'follow-app') {
+    foreground = await foregroundRect()
+    if (window !== widgetWindow || window.isDestroyed() || widgetPrefs.snap !== snap) return
   }
-  widgetWindow.setBounds({ x: Math.round(x), y: Math.round(y), width: size[0], height: size[1] })
+
+  // At fractional Windows display scales, feeding getSize() back into setBounds can grow the window.
+  const { width, height } = widgetSize
+  if (foreground && foreground.width > 100 && foreground.height > 100 && foreground.x > -30000) {
+    x = foreground.x + foreground.width - width - gap
+    y = foreground.y + 4
+  } else {
+    if (['top-right', 'top', 'bottom-right', 'follow-app'].includes(snap)) x = area.x + area.width - width - gap
+    if (snap === 'bottom-left' || snap === 'bottom-right') y = area.y + area.height - height - gap
+  }
+  window.setBounds({ x: Math.round(x), y: Math.round(y), width, height })
 }
 
 function startSnapTimer() {
-  if (snapTimer) clearInterval(snapTimer)
-  if (widgetPrefs.snap === 'follow-app') snapTimer = setInterval(() => void applySnap(), 1200)
+  clearInterval(snapTimer)
+  snapTimer = widgetPrefs.snap === 'follow-app' ? setInterval(() => void applySnap(), 1200) : null
 }
 
 function createWidgetWindow() {
+  widgetSize = initialWidgetSize
   widgetWindow = new BrowserWindow({
-    width: 168,
-    height: 216,
+    ...initialWidgetSize,
     minWidth: 150,
     minHeight: 160,
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
-    alwaysOnTop: true,
     resizable: true,
     skipTaskbar: true,
     show: false,
@@ -583,15 +625,15 @@ function createWidgetWindow() {
       sandbox: true,
     },
   })
-  if (process.env.VITE_DEV_SERVER_URL) widgetWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}widget.html`)
+  if (process.env.VITE_DEV_SERVER_URL) widgetWindow.loadURL(new URL('widget.html', process.env.VITE_DEV_SERVER_URL).href)
   else widgetWindow.loadFile(path.join(__dirname, '../dist/widget.html'))
 
   widgetWindow.once('ready-to-show', () => {
-    pushWidgetData()
     applyWidgetAppearance()
     setTimeout(() => void applySnap(), 60)
-    if (widgetShouldShow) widgetWindow.show()
+    if (widgetShouldShow) widgetWindow.showInactive()
   })
+  widgetWindow.on('will-resize', (_event, { width, height }) => { widgetSize = { width, height } })
   widgetWindow.on('closed', () => { widgetWindow = null })
 }
 
@@ -601,7 +643,7 @@ function setWidgetVisible(visible) {
   widgetShouldShow = Boolean(visible)
   if (visible) {
     if (!widgetWindow || widgetWindow.isDestroyed()) createWidgetWindow()
-    else { pushWidgetData(); widgetWindow.show() }
+    else { pushWidgetData(); widgetWindow.showInactive() }
   } else if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.hide()
   }
@@ -631,16 +673,16 @@ function createTray() {
 }
 
 function registerIpc() {
+  ipcMain.handle('window:glass-wallpaper', (event) => {
+    if (event.sender !== mainWindow?.webContents && event.sender !== widgetWindow?.webContents) return null
+    return glassWallpaper()
+  })
   ipcMain.on('window:minimize', () => hideToTray(true))
   ipcMain.on('window:close', () => hideToTray(false))
   ipcMain.on('window:set-always-on-top', (_event, value) => mainWindow?.setAlwaysOnTop(Boolean(value), 'screen-saver'))
   ipcMain.on('window:set-opacity', (_event, value) => {
     const opacity = Math.min(1, Math.max(0.2, Number(value)))
     if (Number.isFinite(opacity)) mainWindow?.setOpacity(opacity)
-  })
-  ipcMain.on('window:set-effect', (_event, effect) => {
-    const material = effect === 'frosted' ? 'acrylic' : effect === 'liquid' ? 'mica' : 'none'
-    try { mainWindow?.setBackgroundMaterial(material) } catch { /* 系统不支持时保留纯色背景 */ }
   })
   ipcMain.on('window:set-mode', (_event, mode) => {
     if (!mainWindow) return
@@ -726,18 +768,21 @@ function registerIpc() {
 
   ipcMain.handle('workspace:write', (_event, data) => {
     try {
-      const todos = normalizeTodos(data && data.todos)
-      if (!todos) return { ok: false, error: '待办数据格式无效。' }
-      const doc = activeDoc()
+      const doc = readProfileDoc(data?.profileId)
+      if (!doc) return { ok: false, error: '找不到要保存的记录档案。' }
+      const isActive = doc.id === readJson(metaPath(), {}).activeId
+      if (data.requireActive && !isActive) return { ok: false, error: '档案已切换，本次同步未应用。' }
+      const todos = data.todos === undefined ? undefined : normalizeTodos(data.todos)
+      if (todos === null) return { ok: false, error: '待办数据格式无效。' }
       const extras = data && data.extras && typeof data.extras === 'object' ? data.extras : null
       if (extras && JSON.stringify(extras).length > 8 * 1024 * 1024) {
         return { ok: false, error: '扩展数据过大，已拒绝写入。' }
       }
-      doc.todos = todos
+      if (todos) doc.todos = todos
       if (extras) doc.extras = extras
       doc.updatedAt = new Date().toISOString()
       saveDoc(doc)
-      notifyWorkspaceChanged()
+      if (isActive) pushWidgetData(doc)
       return { ok: true, count: doc.todos.length }
     } catch (reason) {
       return { ok: false, error: reason instanceof Error ? reason.message : '写入工作区失败。' }
@@ -783,11 +828,19 @@ function registerIpc() {
     if (!widgetWindow || widgetWindow.isDestroyed()) return
     const width = Math.min(520, Math.max(200, Number(size?.width) || 260))
     const height = Math.min(720, Math.max(180, Number(size?.height) || 216))
+    widgetSize = { width, height }
     widgetWindow.setSize(width, height)
     void applySnap()
   })
 
-  ipcMain.on('widget:appearance', (_event, prefs) => { applyWidgetAppearance(prefs); startSnapTimer() })
+  ipcMain.on('widget:appearance', (_event, prefs) => {
+    const previousSnap = widgetPrefs.snap
+    applyWidgetAppearance(prefs)
+    if (widgetPrefs.snap !== previousSnap) {
+      startSnapTimer()
+      void applySnap()
+    }
+  })
 
   ipcMain.handle('widget:toggle-habit', (_event, data) => {
     const habitId = data && data.habitId
@@ -886,6 +939,7 @@ function registerIpc() {
     fs.writeFileSync(target.filePath, JSON.stringify({
       app: 'FocusNotes', version: 2, exportedAt: new Date().toISOString(), profile: doc.name,
       todos: doc.todos, extras: doc.extras ?? null,
+      ...(typeof doc.memo === 'string' && doc.memo ? { memo: doc.memo } : {}),
     }, null, 2), 'utf8')
     return { ok: true, message: `已导出到 ${target.filePath}` }
   })
@@ -901,17 +955,19 @@ function registerIpc() {
     try {
       const raw = JSON.parse(fs.readFileSync(picked.filePaths[0], 'utf8'))
       const todos = normalizeTodos(Array.isArray(raw) ? raw : raw && raw.todos)
-      if (!todos || !todos.length) return { ok: false, message: '文件中没有可导入的待办。' }
+      const memo = typeof raw?.memo === 'string' ? raw.memo : ''
+      if (memo.length > MAX_MEMO_LENGTH) return { ok: false, message: '备忘录不能超过 100 万字符。' }
+      if (!todos || (!todos.length && !memo)) return { ok: false, message: '文件中没有可导入的待办或备忘录。' }
       const docs = ensureProfiles()
       const baseName = path.basename(picked.filePaths[0], '.json').replace(/^FocusNotes-/, '').replace(/-\d{8}$/, '')
       const now = new Date().toISOString()
       const doc = {
         id: newProfileId(), name: uniqueName(baseName || '导入的记录', docs), createdAt: now, updatedAt: now,
-        todos, extras: raw && typeof raw === 'object' && raw.extras && typeof raw.extras === 'object' ? raw.extras : null,
+        todos, ...(memo ? { memo } : {}), extras: raw && typeof raw === 'object' && raw.extras && typeof raw.extras === 'object' ? raw.extras : null,
       }
       saveDoc(doc)
       setActive(doc.id)
-      return { ok: true, message: `已导入 ${todos.length} 项待办。`, ...payload() }
+      return { ok: true, message: memo ? `已导入备忘录和 ${todos.length} 项待办。` : `已导入 ${todos.length} 项待办。`, ...payload() }
     } catch {
       return { ok: false, message: '文件无法解析，请选择 FocusNotes 导出的 JSON 记录。' }
     }
@@ -1053,7 +1109,7 @@ ipcMain.handle('gitee:get', () => {
     if (raw.token && safeStorage.isEncryptionAvailable()) {
       try { token = safeStorage.decryptString(Buffer.from(raw.token, 'base64')) } catch { token = '' }
     }
-    return { owner: raw.owner || '', repo: raw.repo || '', branch: raw.branch || 'master', path: raw.path || 'focusnotes/data.json', token }
+    return { owner: raw.owner || '', repo: raw.repo || '', branch: raw.branch || 'master', path: raw.path || 'focusnotes/data.json', profileId: raw.profileId || null, token }
   } catch { return null }
 })
 
@@ -1064,7 +1120,13 @@ ipcMain.handle('gitee:set', (_event, config) => {
       repo: String(config?.repo || '').trim(),
       branch: String(config?.branch || 'master').trim() || 'master',
       path: String(config?.path || 'focusnotes/data.json').trim() || 'focusnotes/data.json',
+      profileId: activeDoc().id,
       token: safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(String(config?.token || '')).toString('base64') : '',
+    }
+    const previous = readJson(giteeConfigPath(), null)
+    if (previous?.profileId && previous.profileId !== record.profileId &&
+      previous.owner === record.owner && previous.repo === record.repo && previous.branch === record.branch && previous.path === record.path) {
+      return { ok: false, message: '这个远端文件已绑定另一份本地档案，请为当前档案使用不同的文件路径。' }
     }
     writeJson(giteeConfigPath(), record)
     return { ok: true, encrypted: safeStorage.isEncryptionAvailable() }

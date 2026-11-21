@@ -38,6 +38,8 @@ export interface ParsedTodoDraft extends TodoDraft {
 export interface KeyValueStorage {
   getItem(key: string): Promise<string | null>
   setItem(key: string, value: string): Promise<void>
+  /** Capture destination and other write context before a snapshot enters the queue. */
+  prepareWrite?(key: string, value: string): () => Promise<void>
 }
 
 export interface UserSession {
@@ -100,7 +102,12 @@ export type FontId = 'system' | 'source-han-sans' | 'source-han-serif' | 'pingfa
 export type NavId = 'today' | 'memos' | 'pomodoro' | 'habits' | 'calendar' | 'quadrant' | 'widgets' | 'search' | 'assistant'
 
 export interface WidgetPreferences {
+  material: 'frosted' | 'classic' | 'liquid'
+  /** Background density percentage. */
   opacity: number
+  /** Transparency of the desktop widget glass background. */
+  glassTransparency: number
+  glassBlur: number
   darkMode: 'system' | 'light' | 'dark'
   alwaysOnTop: boolean
   snap: WidgetSnap

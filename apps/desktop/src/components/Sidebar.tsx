@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react'
-import { CheckCircle2, ChevronDown, Folder, Hash, Inbox, ListChecks, NotebookPen, Plus, Trash2, UserRound } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronDown, Hash, History, NotebookPen, Plus, Trash2, UserRound } from 'lucide-react'
 import { addDays, dateKey, type TodoItem, type TodoList } from '@focusnotes/core'
 import { listViewId, tagViewId, type ViewId } from '../navigation'
+import { listIcon } from '../taskIcons'
 
 interface SidebarProps {
+  visible: boolean
   view: ViewId
   todos: TodoItem[]
   lists: TodoList[]
@@ -16,7 +18,7 @@ interface SidebarProps {
 function countActive(todos: TodoItem[]): number {
   return todos.filter((todo) => !todo.completed && !todo.deleted).length
 }
-export function Sidebar({ view, todos, lists, onNavigate, onAddList, profileName, onProfile }: SidebarProps) {
+export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList, profileName, onProfile }: SidebarProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
 
@@ -60,13 +62,13 @@ export function Sidebar({ view, todos, lists, onNavigate, onAddList, profileName
   }
 
   const smart = [
-    { id: 'today' as const, label: '今天', icon: ListChecks, count: stats.today },
-    { id: 'recent' as const, label: '最近 7 天', icon: Inbox, count: stats.recent },
-    { id: 'inbox' as const, label: '收集箱', icon: Inbox, count: stats.inbox },
+    { id: 'today' as const, label: '今天', icon: CalendarDays, count: stats.today },
+    { id: 'recent' as const, label: '最近 7 天', icon: History, count: stats.recent },
+    { id: 'inbox' as const, label: '收集箱', icon: listIcon('inbox'), count: stats.inbox },
   ]
 
   return (
-    <aside className="sidebar">
+    <aside id="workspace-sidebar" className="sidebar" hidden={!visible} aria-label="任务清单">
       <div className="brand">
         <span className="brand-mark"><NotebookPen size={17} /></span>
         <div className="brand-text">
@@ -125,13 +127,14 @@ export function Sidebar({ view, todos, lists, onNavigate, onAddList, profileName
           {lists.filter((list) => list.id !== 'inbox').map((list) => {
             const active = view === listViewId(list.id)
             const count = listCounts.get(list.id) ?? 0
+            const Icon = listIcon(list.id)
             return (
               <button
                 key={list.id}
                 className={`side-row list-row${active ? ' active' : ''}`}
                 onClick={() => onNavigate(listViewId(list.id))}
               >
-                <Folder size={16} strokeWidth={1.8} style={{ color: list.color }} />
+                <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
                 <span className="side-label">{list.name}</span>
                 {count > 0 && <span className="side-count">{count}</span>}
               </button>
