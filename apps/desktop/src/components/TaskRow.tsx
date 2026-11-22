@@ -1,6 +1,10 @@
 import { CalendarClock, Check, Flag, RotateCcw, Trash2 } from 'lucide-react'
 import type { TodoItem, TodoList } from '@focusnotes/core'
+import { getQuadrant, QUADRANTS } from '@focusnotes/core'
 import { formatDue } from '../date'
+import { useRef, useState } from 'react'
+import { taskMotionDuration } from '../motion'
+import { listIcon, QUADRANT_ICONS } from '../taskIcons'
 
 interface TaskRowProps {
   todo: TodoItem
@@ -14,11 +18,44 @@ interface TaskRowProps {
 }
 
 export function TaskRow({ todo, lists, compact, onToggle, onEdit, onDelete, onRestore, onPurge }: TaskRowProps) {
+  const row = useRef<HTMLDivElement>(null)
+  const toggling = useRef(false)
+  const [completing, setCompleting] = useState(false)
+  async function toggle() {
+    if (toggling.current) return
+    const duration = taskMotionDuration()
+    if (todo.completed || duration === 0 || !row.current) {
+      onToggle(todo.id)
+      return
+    }
+    toggling.current = true
+    setCompleting(true)
+    const height = row.current.getBoundingClientRect().height
+    let fallback: number | undefined
+    try {
+      const animation = row.current.animate([
+        { height: `${height}px`, opacity: 1 },
+        { height: `${height}px`, opacity: .6, offset: .4 },
+        { height: '0px', minHeight: '0px', paddingTop: '0px', paddingBottom: '0px', opacity: 0 },
+      ], { duration, easing: 'cubic-bezier(.2,.7,.2,1)' })
+      await Promise.race([
+        animation.finished,
+        new Promise<void>((resolve) => { fallback = window.setTimeout(resolve, duration + 90) }),
+      ])
+    } catch { /* A canceled animation still commits the user's action. */ }
+    finally { window.clearTimeout(fallback) }
+    onToggle(todo.id)
+    toggling.current = false
+    setCompleting(false)
+  }
   const list = lists.find((item) => item.id === todo.listId)
+  const ListIcon = listIcon(todo.listId)
+  const quadrant = getQuadrant(todo)
+  const PriorityIcon = QUADRANT_ICONS[quadrant]
   const due = todo.dueAt ? formatDue(todo, new Date()) : ''
   const overdue = Boolean(todo.dueAt && !todo.completed && Date.parse(todo.dueAt) < Date.now())
   return (
-    <div className={`task-row${todo.completed ? ' done' : ''}${compact ? ' compact' : ''}`}>
+    <div ref={row} className={`task-row${todo.completed ? ' done' : ''}${compact ? ' compact' : ''}${completing ? ' completing' : ''}`}>
       {todo.deleted ? (
         <>
           <span className="task-deleted-mark">已删除</span>
@@ -42,12 +79,13 @@ export function TaskRow({ todo, lists, compact, onToggle, onEdit, onDelete, onRe
       ) : (
         <>
           <button
-            className={`task-check${todo.completed ? ' checked' : ''}`}
-            onClick={() => onToggle(todo.id)}
+            className={`task-check${todo.completed || completing ? ' checked' : ''}`}
+            onClick={() => void toggle()}
+            disabled={completing}
             aria-label={todo.completed ? '标记为未完成' : '标记为完成'}
             aria-pressed={todo.completed}
           >
-            {todo.completed && <Check size={12} strokeWidth={3} />}
+            {(todo.completed || completing) && <Check size={12} strokeWidth={3} />}
           </button>
           <button className="task-main" onClick={() => onEdit(todo)}>
             <span className="task-title">{todo.title}</span>
@@ -60,22 +98,14 @@ export function TaskRow({ todo, lists, compact, onToggle, onEdit, onDelete, onRe
                 </span>
               )}
               {list && (
-                <span className="task-list-name" style={{ color: list.color }}>
+                <span className="task-list-name">
+                  <ListIcon size={12} strokeWidth={1.8} aria-hidden="true" />
                   {list.name}
                 </span>
               )}
-              {todo.important && (
-                <span className="task-flag important">
-                  <Flag size={11} />
-                  重要
-                </span>
-              )}
-              {todo.urgent && (
-                <span className="task-flag urgent">
-                  <Flag size={11} />
-                  紧急
-                </span>
-              )}
+              <span className="task-priority" role="img" aria-label={QUADRANTS[quadrant].label} title={QUADRANTS[quadrant].label}>
+                <PriorityIcon size={13} strokeWidth={1.8} aria-hidden="true" />
+              </span>
               {!compact && todo.tags.map((tag) => <span className="task-tag" key={tag}>#{tag}</span>)}
             </span>
           </button>

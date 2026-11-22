@@ -44,7 +44,7 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   dailyGoal: 8,
   sound: true,
   font: 'system',
-  widget: { opacity: 100, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100 },
+  widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100 },
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
   navHidden: ['search'],
 }
@@ -427,6 +427,8 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
 
   const prefRecord = asRecord(record.preferences) ?? {}
   const widgetPref = asRecord(prefRecord.widget) ?? {}
+  const widgetOpacity = numberIn(widgetPref.opacity, DEFAULT_PREFERENCES.widget.opacity, 20, 100)
+  const previousGlassTransparency = Math.round(55 - widgetOpacity * .27)
   const validSnaps: WidgetSnap[] = ['none', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'top', 'follow-app']
   const snap = widgetPref.snap
   const validNav = NAV_ITEMS.map((item) => item.id)
@@ -446,7 +448,10 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
     sound: prefRecord.sound !== false,
     font: FONT_OPTIONS.some((item) => item.id === prefRecord.font) ? prefRecord.font as FontId : 'system',
     widget: {
-      opacity: numberIn(widgetPref.opacity, 100, 20, 100),
+      material: widgetPref.material === 'classic' || widgetPref.material === 'liquid' ? widgetPref.material : DEFAULT_PREFERENCES.widget.material,
+      opacity: widgetOpacity,
+      glassTransparency: numberIn(widgetPref.glassTransparency ?? previousGlassTransparency, previousGlassTransparency, 0, 100),
+      glassBlur: numberIn(widgetPref.glassBlur ?? DEFAULT_PREFERENCES.widget.glassBlur, DEFAULT_PREFERENCES.widget.glassBlur, 0, 32),
       darkMode: widgetPref.darkMode === 'light' || widgetPref.darkMode === 'dark' ? widgetPref.darkMode : 'system',
       alwaysOnTop: widgetPref.alwaysOnTop !== false,
       snap: typeof snap === 'string' && validSnaps.includes(snap as WidgetSnap) ? snap as WidgetSnap : 'top-right',

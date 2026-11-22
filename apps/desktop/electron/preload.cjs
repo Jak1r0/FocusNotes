@@ -2,10 +2,10 @@ const { contextBridge, ipcRenderer } = require('electron')
 
 contextBridge.exposeInMainWorld('focusDesktop', {
   minimize: () => ipcRenderer.send('window:minimize'),
+  glassWallpaper: () => ipcRenderer.invoke('window:glass-wallpaper'),
   close: () => ipcRenderer.send('window:close'),
   setAlwaysOnTop: (value) => ipcRenderer.send('window:set-always-on-top', value),
   setOpacity: (value) => ipcRenderer.send('window:set-opacity', value),
-  setEffect: (effect) => ipcRenderer.send('window:set-effect', effect),
   setMode: (mode) => ipcRenderer.send('window:set-mode', mode),
   onNavigateView: (callback) => {
     const listener = (_event, view) => callback(view)

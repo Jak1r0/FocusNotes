@@ -24,8 +24,11 @@ import { QuadrantView } from './components/QuadrantView'
 import { CalendarView } from './components/CalendarView'
 import { AssistantView } from './components/AssistantView'
 import { WidgetView } from './components/WidgetView'
+import { applyPalette, resolvePalette } from './palettes'
+import { resolveMotion } from './motion'
 import { SearchDialog } from './components/SearchDialog'
 import { SettingsDialog } from './components/SettingsDialog'
+import { GlassBackdrop } from './components/GlassBackdrop'
 import { ProfileDialog, type ActionResult } from './components/ProfileDialog'
 import { useWorkspace } from './useWorkspace'
 import { usePomodoroTimer } from './usePomodoroTimer'
@@ -64,6 +67,23 @@ export default function App() {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [profilesOpen, setProfilesOpen] = useState(false)
   const [error, setError] = useState('')
+  const [compactWorkspace, setCompactWorkspace] = useState(() => window.matchMedia('(max-width: 940px)').matches)
+  const [sidebarPreference, setSidebarPreference] = useState(() => window.localStorage.getItem('focusnotes.sidebar'))
+  const sidebarVisible = sidebarPreference === null ? !compactWorkspace : sidebarPreference === 'open'
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 940px)')
+    const update = () => setCompactWorkspace(query.matches)
+    query.addEventListener('change', update)
+    update()
+    return () => query.removeEventListener('change', update)
+  }, [])
+
+  function toggleSidebar() {
+    const next = sidebarVisible ? 'closed' : 'open'
+    setSidebarPreference(next)
+    window.localStorage.setItem('focusnotes.sidebar', next)
+  }
 
   const [mini, setMini] = useState(() => window.localStorage.getItem('focusnotes.mode') === 'mini')
   const [opacity, setOpacity] = useState(() => {
@@ -75,8 +95,19 @@ export default function App() {
     const saved = window.localStorage.getItem('focusnotes.effect')
     return saved === 'frosted' || saved === 'liquid' ? saved : 'solid'
   })
+  const [windowBlur, setWindowBlur] = useState(() => {
+    const value = Number(localStorage.getItem('focusnotes.blur') ?? 14)
+    return Number.isFinite(value) ? Math.min(32, Math.max(0, Math.round(value))) : 14
+  })
   const [widgetEnabled, setWidgetEnabled] = useState(() => loadBool('focusnotes.widget', true))
   const [themeMode, setThemeMode] = useState<ThemeMode>(loadThemeMode)
+  const [palette, setPalette] = useState(() => resolvePalette(window.localStorage.getItem('focusnotes.palette') ?? 'mist').id)
+  const [motion, setMotion] = useState(() => resolveMotion(window.localStorage.getItem('focusnotes.motion')))
+
+  useEffect(() => {
+    document.documentElement.dataset.motion = motion
+    window.localStorage.setItem('focusnotes.motion', motion)
+  }, [motion])
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [remindEnabled, setRemindEnabled] = useState(() => loadBool('focusnotes.remind', true))
   const [leadMinutes, setLeadMinutes] = useState(() => Number(window.localStorage.getItem('focusnotes.remindMinutes') ?? 15))
@@ -96,24 +127,33 @@ export default function App() {
 
   useEffect(() => { window.focusDesktop?.setAlwaysOnTop(alwaysOnTop); window.localStorage.setItem('focusnotes.pin', String(alwaysOnTop)) }, [alwaysOnTop])
   useEffect(() => {
-    window.focusDesktop?.setEffect(windowEffect)
     window.localStorage.setItem('focusnotes.effect', windowEffect)
   }, [windowEffect])
+  useEffect(() => { window.localStorage.setItem('focusnotes.blur', String(windowBlur)) }, [windowBlur])
   useEffect(() => {
     window.focusDesktop?.setWidgetEnabled(widgetEnabled)
     window.localStorage.setItem('focusnotes.widget', String(widgetEnabled))
   }, [widgetEnabled])
   const refreshRef = useRef(ws.refreshProfile)
   refreshRef.current = ws.refreshProfile
-  useEffect(() => window.focusDesktop?.onWorkspaceChanged(() => void refreshRef.current()), [])
+  useEffect(() => window.focusDesktop?.onWorkspaceChanged(() => {
+    void refreshRef.current().catch(() => setError('无法刷新工作区，请重试。'))
+  }), [])
+  const refreshProfiles = ws.refreshProfiles
+  useEffect(() => { if (profilesOpen) void refreshProfiles() }, [profilesOpen, refreshProfiles])
 
   // 工作区偏好变化时，把字体与小组件外观同步到主窗口与小部件。
   useEffect(() => {
     const prefs = ws.extras.preferences
     const family = FONT_OPTIONS.find((item) => item.id === prefs.font)?.family || FONT_OPTIONS[0]!.family
     document.documentElement.style.setProperty('--app-font', family)
-    window.focusDesktop?.widget.appearance(prefs.widget)
-  }, [ws.extras.preferences.font, ws.extras.preferences.widget])
+    window.focusDesktop?.widget.appearance({ ...prefs.widget, motion })
+  }, [ws.extras.preferences.font, ws.extras.preferences.widget, motion])
+
+  useEffect(() => {
+    applyPalette(palette)
+    window.localStorage.setItem('focusnotes.palette', palette)
+  }, [palette])
 
   useEffect(() => window.focusDesktop?.onNavigateView((view) => setView(view as ViewId)), [])
   useEffect(() => { window.focusDesktop?.setOpacity(opacity / 100); window.localStorage.setItem('focusnotes.opacity', String(opacity)) }, [opacity])
@@ -250,23 +290,26 @@ export default function App() {
   let content: ReactNode = null
 
   if (view === 'today') {
-    subtitle = `${new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' })} · ${counts.today} 件待办`
+    const endOfToday = new Date()
+    endOfToday.setHours(23, 59, 59, 999)
+    const defaultDueAt = endOfToday.toISOString()
     const todayTasks = open.filter((todo) => todo.dueAt && dateKey(todo.dueAt) <= todayKey)
     const todayCompleted = completed.filter((todo) => todo.completedAt && dateKey(todo.completedAt) === todayKey)
     content = <TaskListView
+      key="today"
+      today
       tasks={todayTasks}
       completedTasks={todayCompleted}
       lists={lists}
       defaultListId="inbox"
-      showQuickAdd
+      defaultDueAt={defaultDueAt}
       countdown={active.filter((todo) => todo.tags.includes('纪念日') && todo.dueAt && !todo.completed).slice(0, 4)}
-      emptyTitle="今天还没有安排"
-      emptyHint="用一句话添加第一件事，或者享受一段留白。"
+      emptyTitle="今天没有待办"
       onAdd={ws.addTask}
       onToggle={(id) => void run(ws.toggleTask(id))}
       onEdit={openTask}
       onDelete={(id) => setDeleting(todos.find((todo) => todo.id === id) ?? null)}
-      onNewTask={() => openNew()}
+      onNewTask={() => openNew({ defaultDueAt })}
     />
   } else if (view === 'recent') {
     const weekAgo = new Date(Date.now() - 6 * 86_400_000).toISOString()
@@ -356,7 +399,12 @@ export default function App() {
     content = <MemosView
       memos={ws.extras.memos}
       onSave={(memo) => ws.updateExtras((current) => ({ ...current, memos: [memo, ...(current.memos ?? []).filter((item) => item.id !== memo.id)] }))}
-      onDelete={(id) => ws.updateExtras((current) => ({ ...current, memos: (current.memos ?? []).filter((item) => item.id !== id) }))}
+      onDelete={(id) => ws.updateExtras((current) => ({
+        ...current,
+        memos: current.memos.map((memo) => memo.id === id
+          ? { ...memo, deleted: true, updatedAt: new Date().toISOString(), revision: memo.revision + 1 }
+          : memo),
+      }))}
     />
   } else if (view === 'habits') {
     title = '习惯'
@@ -434,48 +482,54 @@ export default function App() {
   />
 
   const [giteeReady, setGiteeReady] = useState(0)
-  const giteeRef = useRef<GiteeConfig | null>(null)
-  const syncingRef = useRef(false)
-  const skipPushRef = useRef(false)
+  const [cloudTarget, setCloudTarget] = useState<{ profileId: string; config: GiteeConfig } | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const latestWorkspace = useRef(ws)
+  latestWorkspace.current = ws
+  const lastUpload = useRef<{ target: typeof cloudTarget; todos: typeof ws.todos; extras: typeof ws.extras } | null>(null)
 
   /** 读取加密保存的 Gitee 配置并首次拉取。 */
   useEffect(() => {
+    if (!ws.ready) return
+    const profileId = ws.profile.id
+    setCloudTarget(null)
     let alive = true
     void (async () => {
       const config = await window.focusDesktop?.gitee.get().catch(() => null)
-      if (!alive || !config?.owner || !config?.repo || !config?.token) return
-      giteeRef.current = { owner: config.owner, repo: config.repo, branch: config.branch || 'master', token: config.token, path: config.path }
-      syncingRef.current = true
+      if (!alive || !config?.owner || !config?.repo || !config?.token || config.profileId !== profileId) return
       try {
-        const remote = await createGiteeSync(giteeRef.current, fetch).pull()
-        if (remote && alive) {
-          skipPushRef.current = true
-          const merged = mergeSyncPayload(buildSyncPayload(ws.todos, ws.extras), remote)
-          await ws.replaceAll(merged.todos, merged.extras)
+        const remote = await createGiteeSync(config, fetch).pull()
+        const current = latestWorkspace.current
+        if (!alive || current.profile.id !== profileId) return
+        if (remote && !current.saveError) {
+          const merged = mergeSyncPayload(buildSyncPayload(current.todos, current.extras), remote)
+          await current.replaceAll(merged.todos, {
+            ...merged.extras, preferences: current.extras.preferences, widgets: current.extras.widgets,
+          }, profileId)
         }
-      } catch { /* 离线时静默，等下次修改再试 */ }
-      finally { syncingRef.current = false }
+        if (alive) setCloudTarget({ profileId, config })
+      } catch {
+        if (alive) setError('Gitee 拉取失败。可在设置中重新连接。')
+      }
     })()
     return () => { alive = false }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [giteeReady])
+  }, [giteeReady, ws.ready, ws.profile.id])
 
   /** 本地变更后 3 秒防抖提交，避免连续编辑产生大量 commit。 */
   useEffect(() => {
-    if (!ws.ready || !giteeRef.current) return
-    if (skipPushRef.current) { skipPushRef.current = false; return }
-    const config = giteeRef.current
+    if (!cloudTarget || cloudTarget.profileId !== ws.profile.id || uploading || ws.saveError) return
+    const previous = lastUpload.current
+    if (previous?.target === cloudTarget && previous.todos === ws.todos && previous.extras === ws.extras) return
     const timer = setTimeout(() => {
-      if (syncingRef.current) return
-      syncingRef.current = true
-      void createGiteeSync(config, fetch)
-        .push(buildSyncPayload(ws.todos, ws.extras))
-        .catch(() => undefined)
-        .finally(() => { syncingRef.current = false })
+      lastUpload.current = { target: cloudTarget, todos: ws.todos, extras: ws.extras }
+      setUploading(true)
+      void createGiteeSync(cloudTarget.config, fetch)
+        .push(buildSyncPayload(ws.todos, ws.extras), { mergeRemote: true })
+        .catch(() => { if (latestWorkspace.current.profile.id === cloudTarget.profileId) setError('Gitee 提交失败，修改已保留在本机。') })
+        .finally(() => setUploading(false))
     }, 3000)
     return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ws.todos, ws.extras, ws.ready])
+  }, [cloudTarget, uploading, ws.todos, ws.extras, ws.profile.id, ws.saveError])
 
   const confirmDialog = deleting && <div className="modal-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeleting(null) }}>
     <div className="confirm-dialog" role="alertdialog" aria-modal="true" aria-label="删除任务">
@@ -506,9 +560,15 @@ export default function App() {
 
   const settings = settingsOpen && <SettingsDialog
     theme={themeMode}
+    palette={palette}
+    dark={dark}
+    onPalette={setPalette}
+    motion={motion}
+    onMotion={setMotion}
     alwaysOnTop={alwaysOnTop}
     opacity={opacity}
     windowEffect={windowEffect}
+    windowBlur={windowBlur}
     widgetEnabled={widgetEnabled}
     remindersEnabled={remindEnabled}
     leadMinutes={leadMinutes}
@@ -520,6 +580,7 @@ export default function App() {
     onAlwaysOnTop={setAlwaysOnTop}
     onOpacity={setOpacity}
     onWindowEffect={setWindowEffect}
+    onWindowBlur={setWindowBlur}
     onWidgetEnabled={setWidgetEnabled}
     onReminders={(enabled, minutes) => { setRemindEnabled(enabled); setLeadMinutes(minutes) }}
     onPreferences={(patch) => ws.updateExtras((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))}
@@ -536,6 +597,7 @@ export default function App() {
 
   if (mini) {
     return <div className={`app-shell mini effect-${windowEffect}`}>
+      {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} />}
       <MiniTopBar onExpand={() => setMini(false)} onMinimize={() => window.focusDesktop?.minimize()} onClose={() => window.focusDesktop?.close()} />
       <main className="mini-content">
         <div className="mini-head">
@@ -551,11 +613,14 @@ export default function App() {
       {taskDialog}
       {confirmDialog}
       {profilesDialog}
-      {error && <div className="toast" role="alert">{error}<button onClick={() => setError('')} aria-label="关闭提示"><X size={14} /></button></div>}
+      {(ws.saveError || error) && <div className="toast" role="alert">{ws.saveError || error}{ws.saveError
+        ? <button onClick={ws.retrySave}>重试</button>
+        : <button onClick={() => setError('')} aria-label="关闭提示"><X size={14} /></button>}</div>}
     </div>
   }
 
   return <div className={`app-shell effect-${windowEffect}`}>
+    {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} />}
     <IconRail
       view={view}
       theme={dark ? 'dark' : 'light'}
@@ -568,11 +633,13 @@ export default function App() {
       navOrder={ws.extras.preferences.navOrder}
       navHidden={ws.extras.preferences.navHidden}
     />
-    <Sidebar view={view} todos={todos} lists={lists} onNavigate={setView} onAddList={addList} profileName={ws.profile.name} onProfile={() => setProfilesOpen(true)} />
+    <Sidebar visible={sidebarVisible} view={view} todos={todos} lists={lists} onNavigate={setView} onAddList={addList} profileName={ws.profile.name} onProfile={() => setProfilesOpen(true)} />
     <main className="workspace">
       <TopBar
         title={title}
         subtitle={subtitle}
+        sidebarVisible={sidebarVisible}
+        onToggleSidebar={toggleSidebar}
         onSearch={() => setSearchOpen(true)}
         onSettings={() => setSettingsOpen(true)}
         onMini={() => setMini(true)}
@@ -580,7 +647,7 @@ export default function App() {
         onClose={() => window.focusDesktop?.close()}
       />
       <div className="workspace-scroll">
-        {!ws.ready ? <div className="empty-state card"><ListTodo size={28} /><p>正在读取工作区…</p></div> : content}
+        {!ws.ready ? <div className="empty-state card"><ListTodo size={28} /><p>正在读取工作区…</p></div> : <div className="view-content" key={view}>{content}</div>}
       </div>
     </main>
 
@@ -590,6 +657,8 @@ export default function App() {
     {settings}
     {profilesDialog}
 
-    {error && <div className="toast" role="alert">{error}<button onClick={() => setError('')} aria-label="关闭提示"><X size={14} /></button></div>}
+    {(ws.saveError || error) && <div className="toast" role="alert">{ws.saveError || error}{ws.saveError
+      ? <button onClick={ws.retrySave}>重试</button>
+      : <button onClick={() => setError('')} aria-label="关闭提示"><X size={14} /></button>}</div>}
   </div>
 }
