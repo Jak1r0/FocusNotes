@@ -8,12 +8,20 @@ import {
   isHabitScheduled,
   startOfDay,
   type Habit,
+  type Quadrant,
   type WidgetKind,
 } from '@focusnotes/core'
 import type { WidgetData } from './desktop'
 import { resolveMotion } from './motion'
 import { GlassBackdrop } from './components/GlassBackdrop'
 import { QUADRANT_GRID_ORDER, QUADRANT_ICONS } from './taskIcons'
+
+const QUADRANT_PALETTES: Record<string, Record<Quadrant, string>> = {
+  classic: { 'important-urgent': '#ff3b30', 'important-not-urgent': '#0a84ff', 'not-important-urgent': '#ff9f0a', 'not-important-not-urgent': '#8e8d93' },
+  klein: { 'important-urgent': '#fb7185', 'important-not-urgent': '#002fa7', 'not-important-urgent': '#f59e0b', 'not-important-not-urgent': '#94a3b8' },
+  morandi: { 'important-urgent': '#b5838d', 'important-not-urgent': '#6d8b74', 'not-important-urgent': '#d9a066', 'not-important-not-urgent': '#9ca3af' },
+  dusk: { 'important-urgent': '#e85d75', 'important-not-urgent': '#3d5a80', 'not-important-urgent': '#ee964b', 'not-important-not-urgent': '#8d99ae' },
+}
 
 const META: Record<WidgetKind, { title: string; icon: typeof ListTodo; view: string }> = {
   tasks: { title: '任务', icon: ListTodo, view: 'today' },
@@ -196,15 +204,16 @@ export function WidgetWindow() {
         </Section>
 
         if (kind === 'quadrant') return <Section key={kind} kind={kind} onOpen={openView}>
-          <div className="widget-quadrant-axis" aria-hidden="true"><span>重要 →</span><span>紧急 ↓</span></div>
           <div className="widget-quadrants">
             {QUADRANT_GRID_ORDER.map((quadrant) => {
               const Icon = QUADRANT_ICONS[quadrant]
               const count = data?.quadrantCounts?.[quadrant] ?? 0
               const meta = QUADRANTS[quadrant]
+              const palette = QUADRANT_PALETTES[data?.appearance.quadrantPalette ?? 'classic'] ?? QUADRANT_PALETTES.classic!
+              const color = palette[quadrant]
               return <div key={quadrant} className="widget-quadrant" role="img" aria-label={`${meta.label}，${count} 项`} title={meta.label}>
-                <span className="widget-quadrant-label" style={{ color: meta.color }}>{meta.shortLabel}</span>
-                <span className="widget-quadrant-value"><Icon size={13} aria-hidden="true" focusable="false" /><strong>{count}</strong></span>
+                <Icon size={19} color={color} aria-hidden="true" focusable="false" />
+                <strong style={{ color }}>{count}</strong>
               </div>
             })}
           </div>

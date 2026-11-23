@@ -211,7 +211,30 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   padding: 14px 0 12px;
   border-right: 1px solid var(--border-soft);
   background: var(--rail);
+  transition: flex-basis 220ms ease, padding 220ms ease;
 }
+.icon-rail.expanded { flex-basis: 184px; align-items: stretch; padding: 14px 10px 12px; }
+.icon-rail.expanded .rail-group { align-items: stretch; }
+.icon-rail.expanded .rail-avatar { align-self: center; }
+.icon-rail.expanded .rail-button { width: 100%; display: flex; justify-content: flex-start; gap: 10px; padding: 0 10px; }
+.rail-label { max-width: 0; overflow: hidden; color: inherit; font-size: 11px; white-space: nowrap; opacity: 0; transition: max-width 200ms ease, opacity 160ms ease; }
+.icon-rail.expanded .rail-label { max-width: 140px; opacity: 1; }
+.icon-rail:not(.expanded) .rail-button:hover .rail-label {
+  position: absolute;
+  z-index: 20;
+  left: 46px;
+  max-width: none;
+  padding: 5px 9px;
+  color: var(--text);
+  font-size: 11px;
+  white-space: nowrap;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+  opacity: 1;
+}
+.icon-rail.expanded .rail-selection { left: 10px; width: calc(100% - 20px); }
 .rail-avatar {
   display: grid;
   place-items: center;

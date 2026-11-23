@@ -1,8 +1,8 @@
 import {
-  Archive,
   BookOpen,
   BriefcaseBusiness,
-  Calendar,
+  CalendarClock,
+  Coffee,
   Dumbbell,
   Heart,
   Inbox,
@@ -21,8 +21,8 @@ export const QUADRANT_GRID_ORDER: readonly Quadrant[] = [
 ]
 
 export const QUADRANT_ICONS: Record<Quadrant, LucideIcon> = {
-  'not-important-not-urgent': Archive,
-  'important-not-urgent': Calendar,
+  'not-important-not-urgent': Coffee,
+  'important-not-urgent': CalendarClock,
   'not-important-urgent': Timer,
   'important-urgent': Rocket,
 }

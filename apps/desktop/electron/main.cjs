@@ -509,7 +509,7 @@ const FONT_FAMILIES = {
 /* ── 小部件磁吸：桌面边角 / 跟随前台应用窗口 ─────────────── */
 
 const widgetMaterials = ['classic', 'frosted', 'liquid']
-const widgetPrefs = { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false, motto: 'Every Second Counts' }
+const widgetPrefs = { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false, motto: 'Every Second Counts', quadrantPalette: 'classic' }
 const initialWidgetSize = { width: 168, height: 216 }
 let widgetSize = initialWidgetSize
 let snapTimer = null
@@ -704,6 +704,7 @@ function applyWidgetAppearance(prefs) {
     if (typeof prefs.locked === 'boolean') widgetPrefs.locked = prefs.locked
     if (typeof prefs.clickThrough === 'boolean') widgetPrefs.clickThrough = prefs.clickThrough
     if (typeof prefs.motto === 'string') widgetPrefs.motto = prefs.motto.slice(0, 80)
+    if (['classic', 'klein', 'morandi', 'dusk'].includes(prefs.quadrantPalette)) widgetPrefs.quadrantPalette = prefs.quadrantPalette
   }
   if (!widgetWindow || widgetWindow.isDestroyed()) return
   try {

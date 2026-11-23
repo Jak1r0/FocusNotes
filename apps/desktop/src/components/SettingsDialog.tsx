@@ -83,6 +83,8 @@ interface SettingsDialogProps {
   onWidgetEnabled: (enabled: boolean) => void
   onWidgetDisplayMode: (mode: WidgetDisplayMode) => void
   widgetPresets: WidgetPreset[]
+  railExpanded: boolean
+  onRailExpanded: (expanded: boolean) => void
   onSaveWidgetPreset: (name: string) => void
   onApplyWidgetPreset: (id: string) => void
   onDeleteWidgetPreset: (id: string) => void
@@ -320,6 +322,13 @@ export function SettingsDialog(props: SettingsDialogProps) {
               </div>
               <div className="settings-group">
                 <span className="settings-label"><LayoutGrid size={12} /> 左侧功能栏</span>
+                <label className="settings-row">
+                  <span><strong>导航展开方式</strong><small>仅图标时悬停显示名称</small></span>
+                  <select value={props.railExpanded ? 'expanded' : 'compact'} onChange={(event) => props.onRailExpanded(event.target.value === 'expanded')}>
+                    <option value="compact">仅图标</option>
+                    <option value="expanded">常展开</option>
+                  </select>
+                </label>
                 <div className="nav-list">
                   {(() => {
                     const full = NAV_ITEMS.map((item) => item.id)
@@ -426,6 +435,15 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   <span><strong>小组件格言</strong><small>显示在小组件顶部，默认 Every Second Counts</small></span>
                   <input className="settings-input" value={widget.motto} maxLength={60} placeholder="Every Second Counts"
                     onChange={(event) => props.onWidgetPreferences({ motto: event.target.value })} />
+                </label>
+                <label className="settings-row">
+                  <span><strong>四象限配色</strong><small>仅图标显示，可选克莱因蓝等组合</small></span>
+                  <select value={widget.quadrantPalette} onChange={(event) => props.onWidgetPreferences({ quadrantPalette: event.target.value as import('@focusnotes/core').QuadrantPaletteId })}>
+                    <option value="classic">经典</option>
+                    <option value="klein">克莱因蓝</option>
+                    <option value="morandi">莫兰迪</option>
+                    <option value="dusk">暮色</option>
+                  </select>
                 </label>
                 <EffectPicker value={widget.material === 'classic' ? 'solid' : widget.material}
                   onChange={(effect) => props.onWidgetPreferences({ material: effect === 'solid' ? 'classic' : effect })} />

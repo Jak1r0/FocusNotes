@@ -219,6 +219,6 @@ class FocusNotesWidgetModule(context: ReactApplicationContext) : ReactContextBas
 }
 
 class FocusNotesWidgetPackage : ReactPackage {
-    override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> = listOf(FocusNotesWidgetModule(context))
+    override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> = listOf(FocusNotesWidgetModule(context), CalendarModule(context))
     override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> = emptyList()
 }

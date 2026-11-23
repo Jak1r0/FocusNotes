@@ -4,6 +4,7 @@ interface TopBarProps {
   title: string
   subtitle: string
   sidebarVisible: boolean
+  sidebarAvailable: boolean
   onToggleSidebar: () => void
   onSearch: () => void
   onSettings: () => void
@@ -11,16 +12,16 @@ interface TopBarProps {
   onClose: () => void
 }
 
-export function TopBar({ title, subtitle, sidebarVisible, onToggleSidebar, onSearch, onSettings, onMinimize, onClose }: TopBarProps) {
+export function TopBar({ title, subtitle, sidebarVisible, sidebarAvailable, onToggleSidebar, onSearch, onSettings, onMinimize, onClose }: TopBarProps) {
   const SidebarIcon = sidebarVisible ? PanelLeftClose : PanelLeftOpen
   const sidebarLabel = sidebarVisible ? '收起清单栏' : '展开清单栏'
   return (
     <header className="topbar">
       <div className="topbar-leading">
-        <button className="icon-button sidebar-toggle" onClick={onToggleSidebar} title={sidebarLabel}
+        {sidebarAvailable && <button className="icon-button sidebar-toggle" onClick={onToggleSidebar} title={sidebarLabel}
           aria-label={sidebarLabel} aria-expanded={sidebarVisible} aria-controls="workspace-sidebar">
           <SidebarIcon size={18} />
-        </button>
+        </button>}
         <div className="topbar-title">
           <h1>{title}</h1>
           <p>{subtitle}</p>

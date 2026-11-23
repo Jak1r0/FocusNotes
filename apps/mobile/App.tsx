@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Animated, Easing, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, TextInput, useColorScheme } from 'react-native'
+import { Alert, Animated, Easing, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, Switch, TextInput, useColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Slider from '@react-native-community/slider'
 import PagerView, { type PagerViewOnPageScrollEvent, type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
@@ -135,6 +135,16 @@ export default function App() {
   const [giteeDraft, setGiteeDraft] = useState({ owner: '', repo: '', branch: 'master', path: 'focusnotes/data.json', token: '' })
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
   const [syncNote, setSyncNote] = useState('')
+  const [calendarPrompt, setCalendarPrompt] = useState(true)
+  const [calendarImport, setCalendarImport] = useState(false)
+  const calendarPromptRef = useRef(true)
+  const calendarImportRef = useRef(false)
+  calendarPromptRef.current = calendarPrompt
+  calendarImportRef.current = calendarImport
+  const CalendarBridge = NativeModules.FocusNotesCalendar as {
+    addEvent(title: string, dueAt: string, notes: string): Promise<string>
+    listEvents(start: number, end: number): Promise<Array<{ id: string; title: string; start: number; end: number; allDay: boolean }>>
+  } | undefined
   const systemColorScheme = useColorScheme()
   const extrasRef = useRef(extras)
   extrasRef.current = extras
@@ -370,6 +380,72 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gitee?.owner, gitee?.repo, gitee?.token])
 
+  useEffect(() => {
+    void AsyncStorage.multiGet(['focusnotes.calendarPrompt', 'focusnotes.calendarImport']).then((pairs) => {
+      setCalendarPrompt(pairs[0]?.[1] !== 'false')
+      setCalendarImport(pairs[1]?.[1] === 'true')
+    }).catch(() => undefined)
+  }, [])
+
+  async function requestCalendarAccess(write: boolean): Promise<boolean> {
+    if (Platform.OS !== 'android') return false
+    const permissions = write
+      ? ['android.permission.READ_CALENDAR', 'android.permission.WRITE_CALENDAR']
+      : ['android.permission.READ_CALENDAR']
+    const result = await PermissionsAndroid.requestMultiple(permissions as Parameters<typeof PermissionsAndroid.requestMultiple>[0])
+    return Object.values(result).every((status) => status === PermissionsAndroid.RESULTS.GRANTED)
+  }
+
+  async function addTodosToCalendar(items: TodoItem[]) {
+    if (!CalendarBridge?.addEvent) return
+    const targets = items.filter((item) => item.dueAt)
+    if (!targets.length) return
+    if (!(await requestCalendarAccess(true))) {
+      Alert.alert('未获得日历权限', '请在系统设置中允许 FocusNotes 写入日历。')
+      return
+    }
+    const raw = await AsyncStorage.getItem('focusnotes.calendarAdded').catch(() => null)
+    const added = new Set<string>(raw ? JSON.parse(raw) as string[] : [])
+    for (const item of targets) {
+      if (added.has(item.id)) continue
+      try {
+        await CalendarBridge.addEvent(item.title, item.dueAt as string, item.notes || '')
+        added.add(item.id)
+      } catch { /* 单个失败继续 */ }
+    }
+    await AsyncStorage.setItem('focusnotes.calendarAdded', JSON.stringify([...added])).catch(() => undefined)
+  }
+
+  async function importCalendarEvents() {
+    if (!CalendarBridge?.listEvents) return
+    if (!(await requestCalendarAccess(false))) return
+    const raw = await AsyncStorage.getItem('focusnotes.calendarImported').catch(() => null)
+    const imported = new Set<string>(raw ? JSON.parse(raw) as string[] : [])
+    const start = Date.now()
+    const end = start + 30 * 24 * 60 * 60 * 1000
+    try {
+      const events = await CalendarBridge.listEvents(start, end)
+      let count = 0
+      for (const event of events) {
+        const key = `${event.id}:${event.start}`
+        if (imported.has(key) || !event.title) continue
+        imported.add(key)
+        await store.add({ title: event.title, dueAt: new Date(event.start).toISOString(), listId: 'inbox', tags: ['日历'], notes: '来自系统日历' })
+        count += 1
+      }
+      await AsyncStorage.setItem('focusnotes.calendarImported', JSON.stringify([...imported])).catch(() => undefined)
+      if (count) setSyncNote(`已从系统日历导入 ${count} 项`)
+    } catch (reason) {
+      setSyncNote(reason instanceof Error ? reason.message : '读取系统日历失败')
+    }
+  }
+
+  useEffect(() => {
+    if (!calendarImport || loading) return
+    void importCalendarEvents()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calendarImport, loading])
+
   async function pullFromGitee() {
     const config = giteeRef.current
     if (!config || syncingRef.current) return
@@ -380,10 +456,18 @@ export default function App() {
       const remote = await api.pull()
       if (remote) {
         skipPushRef.current = true
+        const localIds = new Set(store.all.map((item) => item.id))
         const merged = mergeSyncPayload(buildSyncPayload(store.all, extrasRef.current), remote)
+        const newIncomplete = merged.todos.filter((item) => !localIds.has(item.id) && !item.completed && !item.deleted && item.dueAt)
         await store.replace(merged.todos)
         await saveExtras(merged.extras)
         setSyncNote(`已合并远端数据（${new Date().toLocaleTimeString('zh-CN')}）`)
+        if (calendarPromptRef.current && newIncomplete.length > 0) {
+          Alert.alert('发现新的待办', `是否将 ${newIncomplete.length} 个未完成待办加入系统日历？`, [
+            { text: '暂不', style: 'cancel' },
+            { text: '加入日历', onPress: () => void addTodosToCalendar(newIncomplete) },
+          ])
+        }
       } else {
         setSyncNote('远端还没有数据，首次保存后会自动上传')
       }
@@ -700,6 +784,28 @@ export default function App() {
               minimumTrackTintColor="#0071e3" maximumTrackTintColor="#d1d1d6" thumbTintColor="#0071e3" />
             <Text style={styles.sliderScale}><Text>紧凑</Text><Text>标准</Text><Text>宽松</Text></Text>
           </View>
+          <View style={styles.layoutSettings}>
+            <View><Text style={styles.actionTitle}>日历联动</Text><Text style={styles.actionHint}>与系统日历双向配合，权限可随时关闭</Text></View>
+            <View style={styles.calendarOption}>
+              <View style={styles.calendarOptionText}><Text style={styles.actionTitle}>同步新待办时提示</Text><Text style={styles.actionHint}>发现远端新未完成待办时，询问是否写入系统日历</Text></View>
+              <Switch value={calendarPrompt} onValueChange={(value) => { setCalendarPrompt(value); void AsyncStorage.setItem('focusnotes.calendarPrompt', String(value)).catch(() => undefined) }} trackColor={{ true: '#0071e3', false: '#d1d1d6' }} />
+            </View>
+            <View style={styles.calendarOption}>
+              <View style={styles.calendarOptionText}><Text style={styles.actionTitle}>读取系统日历</Text><Text style={styles.actionHint}>开启后将未来 30 天日程转换为待办</Text></View>
+              <Switch value={calendarImport} onValueChange={(value) => {
+                if (!value) {
+                  setCalendarImport(false)
+                  void AsyncStorage.setItem('focusnotes.calendarImport', 'false').catch(() => undefined)
+                  return
+                }
+                void requestCalendarAccess(false).then((granted) => {
+                  if (!granted) { Alert.alert('未获得日历权限', '请在系统设置中允许 FocusNotes 读取日历。'); return }
+                  setCalendarImport(true)
+                  void AsyncStorage.setItem('focusnotes.calendarImport', 'true').catch(() => undefined)
+                })
+              }} trackColor={{ true: '#0071e3', false: '#d1d1d6' }} />
+            </View>
+          </View>
           <View style={styles.dataInfo}><Database size={20} color="#0071e3" /><View style={styles.dataInfoText}><Text style={styles.dataTitle}>本地数据存储</Text><Text style={styles.dataHint}>待办、习惯和专注记录保存在此设备的应用存储中。</Text></View></View>
           <Pressable style={styles.dataAction} onPress={() => run(exportData())}><Download size={17} color="#0071e3" /><View style={styles.actionText}><Text style={styles.actionTitle}>导出完整备份</Text><Text style={styles.actionHint}>保存为 JSON 文件，可用于迁移或恢复</Text></View></Pressable>
           <Pressable style={styles.dataAction} onPress={() => run(importData())}><Upload size={17} color="#0071e3" /><View style={styles.actionText}><Text style={styles.actionTitle}>导入并合并</Text><Text style={styles.actionHint}>选择备份文件，合并待办、习惯和历史</Text></View></Pressable>
@@ -819,6 +925,8 @@ const styles = StyleSheet.create({
   actionText: { flex: 1 },
   actionTitle: { color: '#1d1d1f', fontSize: 13, fontWeight: '600' },
   actionHint: { marginTop: 4, color: '#8e8d93', fontSize: 10, lineHeight: 14 },
+  calendarOption: { marginTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  calendarOptionText: { flex: 1 },
   syncNote: { marginTop: 12, color: '#8e8d93', fontSize: 10, lineHeight: 15 },
   fab: { position: 'absolute', right: 22, bottom: 28, width: 56, height: 56, alignItems: 'center', justifyContent: 'center', borderRadius: 28, backgroundColor: '#0071e3', shadowColor: '#0071e3', shadowOpacity: .3, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 6 },
 })

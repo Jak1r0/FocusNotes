@@ -71,7 +71,10 @@ export default function App() {
   const [error, setError] = useState('')
   const [compactWorkspace, setCompactWorkspace] = useState(() => window.matchMedia('(max-width: 940px)').matches)
   const [sidebarPreference, setSidebarPreference] = useState(() => window.localStorage.getItem('focusnotes.sidebar'))
-  const sidebarVisible = sidebarPreference === null ? !compactWorkspace : sidebarPreference === 'open'
+  const [railExpanded, setRailExpanded] = useState(() => window.localStorage.getItem('focusnotes.railExpanded') === 'true')
+  const taskView = view === 'today' || view === 'recent' || view === 'inbox' || view === 'completed' || view === 'trash' || view.startsWith('list:') || view.startsWith('tag:')
+  const sidebarVisible = taskView && (sidebarPreference === null ? !compactWorkspace : sidebarPreference === 'open')
+  useEffect(() => { window.localStorage.setItem('focusnotes.railExpanded', String(railExpanded)) }, [railExpanded])
 
   useEffect(() => {
     const query = window.matchMedia('(max-width: 940px)')
@@ -702,6 +705,8 @@ export default function App() {
     widgetModeError={widgetModeError}
     onWidgetDisplayMode={changeWidgetMode}
     widgetPresets={widgetPresets}
+    railExpanded={railExpanded}
+    onRailExpanded={setRailExpanded}
     onSaveWidgetPreset={saveWidgetPreset}
     onApplyWidgetPreset={applyWidgetPreset}
     onDeleteWidgetPreset={deleteWidgetPreset}
@@ -730,6 +735,7 @@ export default function App() {
       onSettings={() => setSettingsOpen(true)}
       onProfile={() => setProfilesOpen(true)}
       onToggleTheme={() => setThemeMode(dark ? 'light' : 'dark')}
+      expanded={railExpanded}
       navOrder={ws.extras.preferences.navOrder}
       navHidden={ws.extras.preferences.navHidden}
     />
@@ -739,6 +745,7 @@ export default function App() {
         title={title}
         subtitle={subtitle}
         sidebarVisible={sidebarVisible}
+        sidebarAvailable={taskView}
         onToggleSidebar={toggleSidebar}
         onSearch={() => setSearchOpen(true)}
         onSettings={() => setSettingsOpen(true)}

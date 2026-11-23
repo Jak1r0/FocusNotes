@@ -105,6 +105,8 @@ export type FontId = 'system' | 'source-han-sans' | 'source-han-serif' | 'pingfa
 /** 左侧功能栏可排序/隐藏的视图。 */
 export type NavId = 'today' | 'memos' | 'pomodoro' | 'habits' | 'calendar' | 'quadrant' | 'widgets' | 'search' | 'assistant'
 
+export type QuadrantPaletteId = 'classic' | 'klein' | 'morandi' | 'dusk'
+
 export interface WidgetPreferences {
   material: 'frosted' | 'classic' | 'liquid'
   /** Background density percentage. */
@@ -123,6 +125,8 @@ export interface WidgetPreferences {
   clickThrough: boolean
   /** 小组件顶部格言，默认 Every Second Counts。 */
   motto: string
+  /** 四象限图标配色方案。 */
+  quadrantPalette: QuadrantPaletteId
 }
 
 /** 桌面小组件布局预设，随个人档案 JSON 保存。 */

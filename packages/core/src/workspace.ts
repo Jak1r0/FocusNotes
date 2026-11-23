@@ -10,6 +10,7 @@ import type {
   TodoList,
   WidgetKind,
   WidgetPreferences,
+  QuadrantPaletteId,
   WidgetPreset,
   WidgetSnap,
   WorkspaceExtras,
@@ -46,7 +47,7 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   dailyGoal: 8,
   sound: true,
   font: 'system',
-  widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100, locked: false, clickThrough: false, motto: 'Every Second Counts' },
+  widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100, locked: false, clickThrough: false, motto: 'Every Second Counts', quadrantPalette: 'classic' },
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
   navHidden: ['search'],
 }
@@ -442,6 +443,7 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
   const widgetOpacity = numberIn(widgetPref.opacity, DEFAULT_PREFERENCES.widget.opacity, 20, 100)
   const previousGlassTransparency = Math.round(55 - widgetOpacity * .27)
   const validSnaps: WidgetSnap[] = ['none', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'top', 'follow-app']
+  const validQuadrantPalettes: QuadrantPaletteId[] = ['classic', 'klein', 'morandi', 'dusk']
   const snap = widgetPref.snap
   const validNav = NAV_ITEMS.map((item) => item.id)
   const rawOrder = Array.isArray(prefRecord.navOrder) ? prefRecord.navOrder.filter((id): id is NavId => validNav.includes(id as NavId)) : []
@@ -471,6 +473,9 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
       locked: widgetPref.locked === true,
       clickThrough: widgetPref.clickThrough === true,
       motto: text(widgetPref.motto, DEFAULT_PREFERENCES.widget.motto, 80) || DEFAULT_PREFERENCES.widget.motto,
+      quadrantPalette: validQuadrantPalettes.includes(widgetPref.quadrantPalette as QuadrantPaletteId)
+        ? widgetPref.quadrantPalette as QuadrantPaletteId
+        : 'classic',
     },
     navOrder,
     navHidden,
@@ -512,6 +517,9 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
         locked: presetWidget.locked === true,
         clickThrough: presetWidget.clickThrough === true,
         motto: text(presetWidget.motto, preferences.widget.motto, 80) || preferences.widget.motto,
+        quadrantPalette: validQuadrantPalettes.includes(presetWidget.quadrantPalette as QuadrantPaletteId)
+          ? presetWidget.quadrantPalette as QuadrantPaletteId
+          : preferences.widget.quadrantPalette,
       }
       widgetPresets.push({
         id,

@@ -20,6 +20,7 @@ interface IconRailProps {
   view: ViewId
   theme: 'light' | 'dark'
   profileName: string
+  expanded: boolean
   onNavigate: (view: ViewId) => void
   onSearch: () => void
   onSettings: () => void
@@ -30,9 +31,9 @@ interface IconRailProps {
 }
 
 const NAV_DEFS: Record<NavId, { id: NavId; label: string; icon: typeof CalendarDays }> = {
-  today: { id: 'today', label: '今天', icon: ListTodo },
+  today: { id: 'today', label: '待办', icon: ListTodo },
   memos: { id: 'memos', label: '备忘录', icon: NotebookPen },
-  pomodoro: { id: 'pomodoro', label: '番茄专注', icon: Timer },
+  pomodoro: { id: 'pomodoro', label: '番茄钟', icon: Timer },
   habits: { id: 'habits', label: '习惯', icon: Flame },
   calendar: { id: 'calendar', label: '日历', icon: CalendarDays },
   quadrant: { id: 'quadrant', label: '四象限', icon: LayoutGrid },
@@ -41,7 +42,7 @@ const NAV_DEFS: Record<NavId, { id: NavId; label: string; icon: typeof CalendarD
   assistant: { id: 'assistant', label: 'AI 助手', icon: Sparkles },
 }
 
-export function IconRail({ view, theme, profileName, onNavigate, onSearch, onSettings, onProfile, onToggleTheme, navOrder, navHidden }: IconRailProps) {
+export function IconRail({ view, theme, profileName, expanded, onNavigate, onSearch, onSettings, onProfile, onToggleTheme, navOrder, navHidden }: IconRailProps) {
   const isActive = (id: ViewId) => view === id || (id === 'today' && (view === 'recent' || view === 'inbox' || view.startsWith('list:') || view.startsWith('tag:')))
   // 渲染层兜底：navOrder 缺失的导航项也要显示，避免旧数据导致新功能不可见。
   const orderedNav = [
@@ -52,8 +53,8 @@ export function IconRail({ view, theme, profileName, onNavigate, onSearch, onSet
   const selectedIndex = items.findIndex((item) => isActive(item.id as ViewId))
   const handle = (id: NavId) => id === 'search' ? onSearch() : onNavigate(id as ViewId)
   return (
-    <nav className="icon-rail" aria-label="主导航">
-      <button className="rail-avatar" onClick={onProfile} title={`记录档案：${profileName}（在左上角侧栏展开）`} aria-label="切换记录档案">
+    <nav className={`icon-rail${expanded ? ' expanded' : ''}`} aria-label="主导航">
+      <button className="rail-avatar" onClick={onProfile} title={`记录档案：${profileName}`} aria-label="切换记录档案">
         <span>{(profileName || 'F').slice(0, 1).toUpperCase()}</span>
       </button>
       <div className="rail-group rail-navigation">
@@ -71,6 +72,7 @@ export function IconRail({ view, theme, profileName, onNavigate, onSearch, onSet
               aria-current={isActive(item.id as ViewId) ? 'page' : undefined}
             >
               <Icon size={20} strokeWidth={1.8} />
+              <span className="rail-label">{item.label}</span>
             </button>
           )
         })}
@@ -79,9 +81,11 @@ export function IconRail({ view, theme, profileName, onNavigate, onSearch, onSet
       <div className="rail-group rail-bottom">
         <button className="rail-button" onClick={onToggleTheme} title="切换明暗" aria-label="切换明暗">
           {theme === 'dark' ? <Sun size={19} strokeWidth={1.8} /> : <Moon size={19} strokeWidth={1.8} />}
+          <span className="rail-label">{theme === 'dark' ? '浅色模式' : '深色模式'}</span>
         </button>
         <button className="rail-button" onClick={onSettings} title="设置" aria-label="设置">
           <Settings size={19} strokeWidth={1.8} />
+          <span className="rail-label">设置</span>
         </button>
       </div>
     </nav>

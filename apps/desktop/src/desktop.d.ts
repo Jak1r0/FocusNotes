@@ -54,7 +54,7 @@ export interface WidgetItem {
   overdue: boolean
 }
 
-export interface WidgetAppearance extends Pick<import('@focusnotes/core').WidgetPreferences, 'material' | 'opacity' | 'glassTransparency' | 'glassBlur' | 'snap' | 'fontSize' | 'motto' | 'locked' | 'clickThrough'> {
+export interface WidgetAppearance extends Pick<import('@focusnotes/core').WidgetPreferences, 'material' | 'opacity' | 'glassTransparency' | 'glassBlur' | 'snap' | 'fontSize' | 'motto' | 'locked' | 'clickThrough' | 'quadrantPalette'> {
   motion?: import('./motion').MotionMode
   fontFamily: string
 }
