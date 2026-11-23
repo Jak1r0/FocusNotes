@@ -508,12 +508,19 @@ const FONT_FAMILIES = {
 /* ── 小部件磁吸：桌面边角 / 跟随前台应用窗口 ─────────────── */
 
 const widgetMaterials = ['classic', 'frosted', 'liquid']
-const widgetPrefs = { opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full' }
+const widgetPrefs = { opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false }
 const initialWidgetSize = { width: 168, height: 216 }
 let widgetSize = initialWidgetSize
 let snapTimer = null
 let widgetDisplayMode = 'normal'
 let widgetModeChange = Promise.resolve()
+let widgetStatePath = ''
+let widgetState = { positions: {}, lastDisplayId: null }
+let savedWidgetDisplayMode = 'normal'
+let desktopWatchTimer = null
+let desktopWatchBusy = false
+let widgetBoundsTimer = null
+let lastWidgetModeError = ''
 
 function changeWidgetDesktopParent(window, attach) {
   const handle = window.getNativeWindowHandle()
@@ -527,28 +534,150 @@ function changeWidgetDesktopParent(window, attach) {
   })
 }
 
+function loadWidgetState() {
+  widgetStatePath = path.join(app.getPath('userData'), 'widget-state.json')
+  try {
+    const raw = JSON.parse(fs.readFileSync(widgetStatePath, 'utf8'))
+    if (raw && typeof raw === 'object') {
+      if (['floating', 'normal', 'desktop'].includes(raw.displayMode)) savedWidgetDisplayMode = raw.displayMode
+      if (raw.positions && typeof raw.positions === 'object') widgetState.positions = raw.positions
+      if (typeof raw.lastDisplayId === 'number' || typeof raw.lastDisplayId === 'string') widgetState.lastDisplayId = raw.lastDisplayId
+    }
+  } catch {
+    // 首次启动或状态文件损坏时使用默认值。
+  }
+}
+
+function saveWidgetState() {
+  if (!widgetStatePath) return
+  try {
+    fs.writeFileSync(widgetStatePath, JSON.stringify({
+      displayMode: savedWidgetDisplayMode,
+      positions: widgetState.positions,
+      lastDisplayId: widgetState.lastDisplayId,
+    }, null, 2))
+  } catch (error) {
+    console.warn('Could not save widget state', error.message)
+  }
+}
+
+function clampWidgetBounds(bounds) {
+  const display = screen.getDisplayMatching(bounds)
+  const area = display.workArea
+  const width = Math.min(520, Math.max(150, Math.round(Number(bounds.width) || initialWidgetSize.width)))
+  const height = Math.min(720, Math.max(160, Math.round(Number(bounds.height) || initialWidgetSize.height)))
+  const x = Math.min(area.x + area.width - width, Math.max(area.x, Math.round(Number(bounds.x) || area.x + 12)))
+  const y = Math.min(area.y + area.height - height, Math.max(area.y, Math.round(Number(bounds.y) || area.y + 12)))
+  return { x, y, width, height, displayId: display.id }
+}
+
+function preferredWidgetBounds() {
+  const last = widgetState.lastDisplayId
+  const saved = last != null ? widgetState.positions[last] : null
+  if (saved) return clampWidgetBounds(saved)
+  const display = mainWindow && !mainWindow.isDestroyed()
+    ? screen.getDisplayMatching(mainWindow.getBounds())
+    : screen.getPrimaryDisplay()
+  return clampWidgetBounds({ x: display.workArea.x + 12, y: display.workArea.y + 12, ...initialWidgetSize })
+}
+
+function restoreWidgetBounds(window) {
+  if (!window || window.isDestroyed()) return
+  const bounds = preferredWidgetBounds()
+  widgetSize = { width: bounds.width, height: bounds.height }
+  window.setBounds({ x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height })
+}
+
+function rememberWidgetBounds(window) {
+  if (!window || window.isDestroyed()) return
+  if (widgetDisplayMode !== 'desktop' && widgetPrefs.snap !== 'none') return
+  const bounds = window.getBounds()
+  const display = screen.getDisplayMatching(bounds)
+  widgetState.positions[display.id] = { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+  widgetState.lastDisplayId = display.id
+  saveWidgetState()
+}
+
+function scheduleRememberWidgetBounds(window) {
+  clearTimeout(widgetBoundsTimer)
+  widgetBoundsTimer = setTimeout(() => rememberWidgetBounds(window), 400)
+}
+
+function stopDesktopWatch() {
+  clearInterval(desktopWatchTimer)
+  desktopWatchTimer = null
+  desktopWatchBusy = false
+}
+
+function notifyWidgetError(message) {
+  lastWidgetModeError = message
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send('widget:display-error', message)
+  }
+}
+
+function startDesktopWatch() {
+  stopDesktopWatch()
+  if (process.platform !== 'win32' || widgetDisplayMode !== 'desktop') return
+  desktopWatchTimer = setInterval(() => {
+    if (desktopWatchBusy) return
+    if (!widgetWindow || widgetWindow.isDestroyed() || widgetDisplayMode !== 'desktop' || !widgetWindow.isVisible()) return
+    desktopWatchBusy = true
+    changeWidgetDesktopParent(widgetWindow, true)
+      .then(() => {
+        if (lastWidgetModeError) notifyWidgetError('')
+      })
+      .catch((error) => notifyWidgetError(`桌面模式连接已断开：${error.message || '未知错误'}`))
+      .finally(() => { desktopWatchBusy = false })
+  }, 15000)
+}
+
 async function applyWidgetDisplayMode(mode) {
-  if (!['floating', 'normal', 'desktop'].includes(mode)) return { ok: false }
+  if (!['floating', 'normal', 'desktop'].includes(mode)) return { ok: false, error: '无效的小部件展示方式。', mode: widgetDisplayMode }
+  if (mode === 'desktop' && process.platform !== 'win32') return { ok: false, error: '桌面模式仅支持 Windows。', mode: widgetDisplayMode }
   if (!widgetWindow || widgetWindow.isDestroyed()) createWidgetWindow()
   const window = widgetWindow
   const previous = widgetDisplayMode
-  if (mode === previous) return { ok: true }
+  if (mode === previous) {
+    savedWidgetDisplayMode = mode
+    saveWidgetState()
+    startDesktopWatch()
+    return { ok: true, mode }
+  }
   try {
     if (previous === 'desktop' || mode === 'desktop') {
-      if (process.platform !== 'win32') return { ok: false }
       window.setAlwaysOnTop(false)
       await changeWidgetDesktopParent(window, mode === 'desktop')
     }
-    if (window.isDestroyed()) return { ok: false }
+    if (window.isDestroyed()) throw new Error('小部件窗口已关闭。')
     window.setAlwaysOnTop(mode === 'floating', 'floating')
     widgetDisplayMode = mode
+    savedWidgetDisplayMode = mode
+    notifyWidgetError('')
+    saveWidgetState()
+    startDesktopWatch()
     startSnapTimer()
-    void applySnap()
-    return { ok: true }
+    applyWidgetAppearance()
+    if (mode === 'desktop' || widgetPrefs.snap === 'none') restoreWidgetBounds(window)
+    else void applySnap()
+    return { ok: true, mode }
   } catch (error) {
-    if (!window.isDestroyed() && previous !== 'desktop') window.setAlwaysOnTop(previous === 'floating', 'floating')
-    console.warn('Could not apply widget display mode', error.message)
-    return { ok: false }
+    // 回滚到切换前的父级与置顶状态，避免窗口停在“半嵌入”状态。
+    if (!window.isDestroyed()) {
+      try {
+        await changeWidgetDesktopParent(window, previous === 'desktop')
+      } catch {
+        // 父级恢复失败时仍继续恢复置顶状态。
+      }
+      window.setAlwaysOnTop(previous === 'floating', 'floating')
+    }
+    widgetDisplayMode = previous
+    savedWidgetDisplayMode = previous
+    startDesktopWatch()
+    const message = error instanceof Error ? error.message : String(error)
+    notifyWidgetError(message)
+    console.warn('Could not apply widget display mode', message)
+    return { ok: false, error: message, mode: previous }
   }
 }
 
@@ -564,8 +693,18 @@ function applyWidgetAppearance(prefs) {
     if (typeof prefs.snap === 'string') widgetPrefs.snap = prefs.snap
     if (['full', 'light', 'off'].includes(prefs.motion)) widgetPrefs.motion = prefs.motion
     if (Number.isFinite(Number(prefs.fontSize))) widgetPrefs.fontSize = Math.min(140, Math.max(80, Number(prefs.fontSize)))
+    if (typeof prefs.locked === 'boolean') widgetPrefs.locked = prefs.locked
+    if (typeof prefs.clickThrough === 'boolean') widgetPrefs.clickThrough = prefs.clickThrough
   }
   if (!widgetWindow || widgetWindow.isDestroyed()) return
+  try {
+    widgetWindow.setMovable(!widgetPrefs.locked)
+    widgetWindow.setFocusable(!widgetPrefs.clickThrough)
+    if (widgetPrefs.clickThrough) widgetWindow.setIgnoreMouseEvents(true, { forward: true })
+    else widgetWindow.setIgnoreMouseEvents(false)
+  } catch (error) {
+    console.warn('Could not apply widget input preferences', error.message)
+  }
   pushWidgetData()
 }
 
@@ -583,9 +722,9 @@ function foregroundRect() {
 }
 
 async function applySnap() {
-  if (!widgetWindow || widgetWindow.isDestroyed() || widgetPrefs.snap === 'none') return
+  if (!widgetWindow || widgetWindow.isDestroyed() || widgetPrefs.snap === 'none' || widgetDisplayMode === 'desktop') return
   const window = widgetWindow
-  const snap = widgetPrefs.snap === 'follow-app' && widgetDisplayMode === 'desktop' ? 'top-right' : widgetPrefs.snap
+  const snap = widgetPrefs.snap
   const display = screen.getDisplayNearestPoint(window.getBounds())
   const area = display.workArea
   const gap = 12
@@ -616,9 +755,13 @@ function startSnapTimer() {
 }
 
 function createWidgetWindow() {
-  widgetSize = initialWidgetSize
+  const bounds = preferredWidgetBounds()
+  widgetSize = { width: bounds.width, height: bounds.height }
   widgetWindow = new BrowserWindow({
-    ...initialWidgetSize,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
     minWidth: 150,
     minHeight: 160,
     frame: false,
@@ -639,11 +782,23 @@ function createWidgetWindow() {
 
   widgetWindow.once('ready-to-show', () => {
     applyWidgetAppearance()
-    setTimeout(() => void applySnap(), 60)
+    if (savedWidgetDisplayMode !== 'normal') {
+      void applyWidgetDisplayMode(savedWidgetDisplayMode)
+    } else if (widgetPrefs.snap === 'none') {
+      restoreWidgetBounds(widgetWindow)
+    } else {
+      setTimeout(() => void applySnap(), 60)
+    }
     if (widgetShouldShow) widgetWindow.showInactive()
   })
   widgetWindow.on('will-resize', (_event, { width, height }) => { widgetSize = { width, height } })
-  widgetWindow.on('closed', () => { widgetWindow = null; widgetDisplayMode = 'normal' })
+  widgetWindow.on('moved', () => scheduleRememberWidgetBounds(widgetWindow))
+  widgetWindow.on('resized', () => scheduleRememberWidgetBounds(widgetWindow))
+  widgetWindow.on('closed', () => {
+    stopDesktopWatch()
+    widgetWindow = null
+    widgetDisplayMode = 'normal'
+  })
 }
 
 let widgetShouldShow = false
@@ -653,8 +808,10 @@ function setWidgetVisible(visible) {
   if (visible) {
     if (!widgetWindow || widgetWindow.isDestroyed()) createWidgetWindow()
     else { pushWidgetData(); widgetWindow.showInactive() }
+    if (widgetDisplayMode === 'desktop') startDesktopWatch()
   } else if (widgetWindow && !widgetWindow.isDestroyed()) {
     widgetWindow.hide()
+    stopDesktopWatch()
   }
 }
 
@@ -1162,6 +1319,7 @@ if (gotLock) {
     registerIpc()
     loadFired()
     ensureProfiles()
+    loadWidgetState()
     createWindow()
     createWidgetWindow()
     createTray()
@@ -1171,5 +1329,11 @@ if (gotLock) {
 }
 
 app.on('before-quit', () => { isQuitting = true })
-app.on('will-quit', () => { if (reminderTimer) clearInterval(reminderTimer); stopSunSchedule() })
+app.on('will-quit', () => {
+  if (reminderTimer) clearInterval(reminderTimer)
+  clearInterval(snapTimer)
+  clearInterval(desktopWatchTimer)
+  clearTimeout(widgetBoundsTimer)
+  stopSunSchedule()
+})
 app.on('window-all-closed', () => { /* 保留托盘运行。 */ })

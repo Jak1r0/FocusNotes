@@ -1,6 +1,6 @@
 {
   "name": "focusnotes",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "private": true,
   "workspaces": [
     "packages/core",
@@ -11,7 +11,9 @@
     "dev:desktop": "npm run dev -w @focusnotes/desktop",
     "build": "npm run build -w @focusnotes/core && npm run build -w @focusnotes/desktop",
     "test": "npm run test -w @focusnotes/core",
-    "typecheck": "npm run build -w @focusnotes/core && npm run typecheck -w @focusnotes/desktop && npm run typecheck -w @focusnotes/mobile"
+    "typecheck": "npm run build -w @focusnotes/core && npm run typecheck -w @focusnotes/desktop && npm run typecheck -w @focusnotes/mobile",
+    "sign:apk": "node scripts/sign-apk.mjs",
+    "verify:release": "node scripts/verify-release.mjs"
   },
   "devDependencies": {
     "@babel/runtime": "^8.1.2",

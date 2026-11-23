@@ -113,6 +113,10 @@ export interface WidgetPreferences {
   snap: WidgetSnap
   /** UI 文字缩放百分比：80 – 140。 */
   fontSize: number
+  /** 锁定小组件位置，禁止拖动。 */
+  locked: boolean
+  /** 桌面模式下鼠标点击穿透到下层窗口。 */
+  clickThrough: boolean
 }
 
 export interface WorkspacePreferences {

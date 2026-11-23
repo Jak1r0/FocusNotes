@@ -44,7 +44,7 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   dailyGoal: 8,
   sound: true,
   font: 'system',
-  widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100 },
+  widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100, locked: false, clickThrough: false },
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
   navHidden: ['search'],
 }
@@ -456,6 +456,8 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
       alwaysOnTop: widgetPref.alwaysOnTop !== false,
       snap: typeof snap === 'string' && validSnaps.includes(snap as WidgetSnap) ? snap as WidgetSnap : 'top-right',
       fontSize: numberIn(widgetPref.fontSize, 100, 80, 140),
+      locked: widgetPref.locked === true,
+      clickThrough: widgetPref.clickThrough === true,
     },
     navOrder,
     navHidden,

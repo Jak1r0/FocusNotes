@@ -173,3 +173,16 @@ describe('normalizeExtras navigation backfill', () => {
     expect(out.preferences.navHidden).toContain('search')
   })
 })
+describe('normalizeExtras widget input preferences', () => {
+  it('keeps lock and click-through flags', () => {
+    const out = normalizeExtras({ version: 2, preferences: { widget: { locked: true, clickThrough: true } } } as never)
+    expect(out.preferences.widget.locked).toBe(true)
+    expect(out.preferences.widget.clickThrough).toBe(true)
+  })
+
+  it('defaults lock and click-through to false', () => {
+    const out = normalizeExtras({ version: 2, preferences: {} } as never)
+    expect(out.preferences.widget.locked).toBe(false)
+    expect(out.preferences.widget.clickThrough).toBe(false)
+  })
+})

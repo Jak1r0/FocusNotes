@@ -26,6 +26,7 @@ import { AssistantView } from './components/AssistantView'
 import { WidgetView } from './components/WidgetView'
 import { applyPalette, resolvePalette } from './palettes'
 import { resolveMotion } from './motion'
+import { createWidgetPreset, loadWidgetPresets, persistWidgetPresets, type WidgetPreset } from './widget-presets'
 import { SearchDialog } from './components/SearchDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { GlassBackdrop } from './components/GlassBackdrop'
@@ -108,11 +109,14 @@ export default function App() {
     setWidgetModeError('')
     try {
       const result = await window.focusDesktop?.setWidgetDisplayMode(mode)
-      if (!result?.ok) throw new Error('Widget display mode unavailable')
+      if (!result?.ok) {
+        setWidgetModeError(result?.error || '无法切换小部件展示方式，请重试。')
+        return
+      }
       setWidgetDisplayMode(mode)
       window.localStorage.setItem('focusnotes.widgetDisplayMode', mode)
-    } catch {
-      setWidgetModeError('无法切换小部件展示方式，请重试。')
+    } catch (error) {
+      setWidgetModeError(error instanceof Error ? error.message : '无法切换小部件展示方式，请重试。')
     } finally {
       setWidgetModePending(false)
     }
@@ -121,6 +125,7 @@ export default function App() {
     const mode = window.localStorage.getItem('focusnotes.widgetDisplayMode')
     if (mode === 'floating' || mode === 'desktop') void changeWidgetMode(mode)
   }, [changeWidgetMode])
+  useEffect(() => window.focusDesktop?.onWidgetDisplayError?.((message) => setWidgetModeError(message)), [])
   const [themeMode, setThemeMode] = useState<ThemeMode>(loadThemeMode)
   const [palette, setPalette] = useState(() => resolvePalette(window.localStorage.getItem('focusnotes.palette') ?? 'mist').id)
   const [motion, setMotion] = useState(() => resolveMotion(window.localStorage.getItem('focusnotes.motion')))
@@ -129,6 +134,25 @@ export default function App() {
     document.documentElement.dataset.motion = motion
     window.localStorage.setItem('focusnotes.motion', motion)
   }, [motion])
+  const [widgetPresets, setWidgetPresets] = useState<WidgetPreset[]>(() => loadWidgetPresets())
+  useEffect(() => { persistWidgetPresets(widgetPresets) }, [widgetPresets])
+  const saveWidgetPreset = useCallback((name: string) => {
+    const preset = createWidgetPreset(name, widgetDisplayMode, motion, ws.extras.preferences.widget)
+    setWidgetPresets((current) => [preset, ...current.filter((item) => item.name !== preset.name)].slice(0, 8))
+  }, [widgetDisplayMode, motion, ws.extras.preferences.widget])
+  const applyWidgetPreset = useCallback((id: string) => {
+    const preset = widgetPresets.find((item) => item.id === id)
+    if (!preset) return
+    ws.updateExtras((current) => ({
+      ...current,
+      preferences: { ...current.preferences, widget: { ...current.preferences.widget, ...preset.widget } },
+    }))
+    setMotion(preset.motion)
+    void changeWidgetMode(preset.displayMode)
+  }, [widgetPresets, ws.updateExtras, changeWidgetMode])
+  const deleteWidgetPreset = useCallback((id: string) => {
+    setWidgetPresets((current) => current.filter((item) => item.id !== id))
+  }, [])
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [remindEnabled, setRemindEnabled] = useState(() => loadBool('focusnotes.remind', true))
   const [leadMinutes, setLeadMinutes] = useState(() => Number(window.localStorage.getItem('focusnotes.remindMinutes') ?? 15))
@@ -604,6 +628,10 @@ export default function App() {
     widgetModePending={widgetModePending}
     widgetModeError={widgetModeError}
     onWidgetDisplayMode={changeWidgetMode}
+    widgetPresets={widgetPresets}
+    onSaveWidgetPreset={saveWidgetPreset}
+    onApplyWidgetPreset={applyWidgetPreset}
+    onDeleteWidgetPreset={deleteWidgetPreset}
     onReminders={(enabled, minutes) => { setRemindEnabled(enabled); setLeadMinutes(minutes) }}
     onPreferences={(patch) => ws.updateExtras((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))}
     onWidgets={(widgets) => ws.updateExtras((current) => ({ ...current, widgets }))}

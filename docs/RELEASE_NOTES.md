@@ -1,5 +1,84 @@
 # FocusNotes 发布说明
 
+## 0.1.3（Windows / Android）
+
+发布日期：2026-11-23
+
+| 平台 | 版本号 | 说明 |
+| --- | --- | --- |
+| Windows | 0.1.3 | 安装包目录 `apps/desktop/release-011e` |
+| Android | 0.1.3（versionCode 6） | 可从 0.1.2 覆盖安装 |
+| 核心包 `@focusnotes/core` | 0.1.3 | 小组件输入偏好与位置状态 |
+
+### 主要变更
+
+#### 桌面小组件
+
+- 显示模式切换改为原子操作：失败时回滚父级与置顶状态，并向主窗口回传具体错误。
+- 固定到桌面后每 15 秒校验父级窗口，Explorer 重启后自动重新挂载；隐藏或关闭时停止检测。
+- 显示模式与每显示器位置持久化到 `userData/widget-state.json`，启动时恢复。
+- 多显示器位置记忆：按显示器保存位置，切换或重启后恢复，并自动夹紧到工作区。
+- 新增「锁定位置」与「点击穿透」开关；点击穿透时窗口不抢焦点。
+- 新增布局预设：保存、应用、删除“显示方式 + 材质 + 玻璃参数 + 字号 + 磁吸 + 动效”，最多 8 个。
+- 固定到桌面时忽略磁吸位置，使用记住的自定义位置；窗口尺寸变化不再被磁吸覆盖。
+
+#### 发布工具
+
+- 新增 `npm run sign:apk`：严格 `zipalign`（16K 页对齐）→ `apksigner`（v1/v2/v3，v4 关闭），密码从环境变量、密码文件或 `local.properties` 读取，不打印密码。
+- 新增 `npm run verify:release`：校验 APK `versionCode` / `versionName`、v1/v2/v3、证书 SHA-256、zipalign、APK/EXE SHA-256 与 EXE ProductVersion。
+
+#### 其他
+
+- 核心测试新增小组件锁定/穿透归一化用例，总计 51 项。
+- 版本号统一为 0.1.3，Android `versionCode` 6。
+
+### 修复内容
+
+- 修复从桌面模式切回浮动/普通模式失败时，窗口停在非置顶状态的问题。
+- 修复 Explorer 重启后固定到桌面的组件不可见、需要手动切换模式的问题。
+- 修复切换显示模式时窗口位置被磁吸覆盖的问题。
+- 修复关闭或隐藏小部件后桌面监控定时器仍在运行的问题。
+- 修复桌面状态未持久化、重启后显示模式丢失的问题。
+- 修复壁纸读取失败时缺少回退提示的问题。
+
+### 兼容性
+
+- **数据格式**：`WidgetPreferences` 新增 `locked` / `clickThrough`，旧数据默认 `false`。
+- **Windows**：Windows 10/11 x64；桌面模式依赖系统 PowerShell。
+- **Android**：Android 7.0（API 24）及以上，`versionCode` 6，可从 0.1.2 覆盖；2.x 需卸载重装。
+- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `2a7333871699d2058ffeaf8be112d9b26e046e0d869aa3f0535007682fbd6f21`。
+- **验签附件**：`FocusNotes-0.1.3-cert.pem` 为公钥证书，`FocusNotes-0.1.3.apk.sha256` 为 APK 校验文件；私钥 keystore 不公开。
+
+### 升级注意事项
+
+1. 升级前导出 JSON 备份。
+2. Android 0.1.2 → 0.1.3 使用相同证书且 `versionCode` 更高，可直接覆盖；2.x 需先卸载。
+3. 桌面固定模式需要允许 PowerShell 运行；首次切换可能有短暂延迟。
+4. 点击穿透开启后，小部件不再接收鼠标事件，需要从主窗口设置关闭。
+5. 布局预保存在本机 `localStorage`，不随 Gitee 同步。
+6. Windows 安装包未做代码签名。
+
+### 已知限制
+
+- Android 习惯提醒时间当前仅保存，不发送本地通知。
+- 桌面固定模式依赖 Windows Explorer；Explorer 重启后最多 15 秒恢复。
+- 桌面壁纸背景仅在 Windows 下可用。
+- Gitee 同步为整文件提交，冲突时需要重新拉取后再提交。
+- R8 代码混淆与资源压缩尚未启用。
+
+### 验证记录
+
+本次发布前已执行：
+
+```powershell
+npm run typecheck   # core / desktop / mobile 均通过
+npm test            # 3 个测试文件，51 项用例通过
+npm run dist -w @focusnotes/desktop  # 生成 Setup 0.1.3
+gradlew assembleRelease  # APK 0.1.3，versionCode 6
+npm run sign:apk     # 严格 zipalign + apksigner，v1/v2/v3 通过
+npm run verify:release  # APK/EXE 校验通过
+```
+
 ## 0.1.2（Windows / Android）
 
 发布日期：2026-11-23

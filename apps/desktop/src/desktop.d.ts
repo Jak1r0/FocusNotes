@@ -99,7 +99,8 @@ declare global {
       testReminder(): void
       notify(payload: { title: string; body: string; silent?: boolean }): void
       setWidgetEnabled(enabled: boolean): void
-      setWidgetDisplayMode(mode: WidgetDisplayMode): Promise<{ ok: boolean }>
+      setWidgetDisplayMode(mode: WidgetDisplayMode): Promise<{ ok: boolean; error?: string; mode?: WidgetDisplayMode }>
+      onWidgetDisplayError(callback: (message: string) => void): () => void
       exportPersonal(kind: 'lists' | 'habits' | 'history' | 'all'): Promise<{ ok: boolean; message?: string; canceled?: boolean }>
       importPersonal(): Promise<{ ok: boolean; message?: string; canceled?: boolean }>
       widget: {

@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('focusDesktop', {
   notify: (payload) => ipcRenderer.send('app:notify', payload),
   setWidgetEnabled: (enabled) => ipcRenderer.send('widget:set-enabled', enabled),
   setWidgetDisplayMode: (mode) => ipcRenderer.invoke('widget:set-display-mode', mode),
+  onWidgetDisplayError: (callback) => {
+    const listener = (_event, message) => callback(message)
+    ipcRenderer.on('widget:display-error', listener)
+    return () => ipcRenderer.removeListener('widget:display-error', listener)
+  },
   exportPersonal: (kind) => ipcRenderer.invoke('personal:export', kind),
   importPersonal: () => ipcRenderer.invoke('personal:import'),
   widget: {

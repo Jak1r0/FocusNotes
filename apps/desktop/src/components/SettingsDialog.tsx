@@ -10,6 +10,7 @@ import {
   FolderOpen,
   History,
   LayoutGrid,
+  Layers,
   Magnet,
   Monitor,
   ArrowUp,
@@ -43,6 +44,7 @@ import {
 import type { ThemeMode, WidgetDisplayMode, WindowEffect } from '../desktop'
 import { PALETTES, type PaletteId } from '../palettes'
 import { MOTION_OPTIONS, resolveMotion, type MotionMode } from '../motion'
+import type { WidgetPreset } from '../widget-presets'
 import { GiteePanel } from './GiteePanel'
 
 interface SettingsDialogProps {
@@ -73,6 +75,10 @@ interface SettingsDialogProps {
   onWindowBlur: (blur: number) => void
   onWidgetEnabled: (enabled: boolean) => void
   onWidgetDisplayMode: (mode: WidgetDisplayMode) => void
+  widgetPresets: WidgetPreset[]
+  onSaveWidgetPreset: (name: string) => void
+  onApplyWidgetPreset: (id: string) => void
+  onDeleteWidgetPreset: (id: string) => void
   onReminders: (enabled: boolean, leadMinutes: number) => void
   onPreferences: (patch: Partial<WorkspacePreferences>) => void
   onWidgets: (widgets: WidgetKind[]) => void
@@ -156,10 +162,11 @@ const SECTIONS: { id: Section; label: string; icon: typeof Palette }[] = [
 export function SettingsDialog(props: SettingsDialogProps) {
   const [section, setSection] = useState<Section>('appearance')
   const [glassControlsOpen, setGlassControlsOpen] = useState(false)
+  const [presetName, setPresetName] = useState('')
   const glassControlsId = useId()
   const widget = props.preferences.widget
   const widgetSnap = props.widgetDisplayMode === 'desktop' && widget.snap === 'follow-app' ? 'top-right' : widget.snap
-  const [version, setVersion] = useState('0.1.1')
+  const [version, setVersion] = useState('0.1.3')
   const [uiScale, setUiScale] = useState(() => {
     const saved = Number(localStorage.getItem('focusnotes.uiScale') ?? 1)
     return Number.isFinite(saved) && saved >= 0.8 && saved <= 1.4 ? saved : 1
@@ -378,6 +385,16 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 {props.widgetModeError && <p className="form-error" role="alert">{props.widgetModeError}</p>}
               </div>
               <div className="settings-group">
+                <label className="settings-row">
+                  <span><strong>锁定位置</strong><small>固定小组件，避免误拖动</small></span>
+                  <button className={`switch${widget.locked ? ' on' : ''}`} onClick={() => props.onWidgetPreferences({ locked: !widget.locked })} aria-label="锁定小组件位置"><i /></button>
+                </label>
+                <label className="settings-row">
+                  <span><strong>点击穿透</strong><small>鼠标点击下层窗口；可从主窗口关闭</small></span>
+                  <button className={`switch${widget.clickThrough ? ' on' : ''}`} onClick={() => props.onWidgetPreferences({ clickThrough: !widget.clickThrough })} aria-label="点击穿透"><i /></button>
+                </label>
+              </div>
+              <div className="settings-group">
                 <span className="settings-label"><Palette size={12} /> 小组件外观</span>
                 <EffectPicker value={widget.material === 'classic' ? 'solid' : widget.material}
                   onChange={(effect) => props.onWidgetPreferences({ material: effect === 'solid' ? 'classic' : effect })} />
@@ -433,6 +450,27 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   ))}
                 </div>
                 <p className="settings-hint">{props.widgetDisplayMode === 'desktop' ? '切换为普通窗口或浮动模式后可跟随应用。' : '「跟随应用」会吸附到当前前台窗口右上角，并随其移动。'}</p>
+              </div>
+              <div className="settings-group">
+                <span className="settings-label"><Layers size={12} /> 布局预设</span>
+                <div className="preset-save">
+                  <input className="preset-input" value={presetName} maxLength={24} placeholder="例如：写作模式"
+                    onChange={(event) => setPresetName(event.target.value)}
+                    onKeyDown={(event) => { if (event.key === 'Enter' && presetName.trim()) { props.onSaveWidgetPreset(presetName); setPresetName('') } }} />
+                  <button className="secondary-button" disabled={!presetName.trim()}
+                    onClick={() => { props.onSaveWidgetPreset(presetName); setPresetName('') }}>保存当前</button>
+                </div>
+                {props.widgetPresets.length > 0 ? (
+                  <div className="preset-list">
+                    {props.widgetPresets.map((preset) => (
+                      <div key={preset.id} className="preset-row">
+                        <span title={preset.name}>{preset.name}</span>
+                        <button className="mini-action" onClick={() => props.onApplyWidgetPreset(preset.id)}>应用</button>
+                        <button className="mini-action" onClick={() => props.onDeleteWidgetPreset(preset.id)} aria-label={`删除预设 ${preset.name}`}>删除</button>
+                      </div>
+                    ))}
+                  </div>
+                ) : <p className="settings-hint">保存显示方式、材质、动效和磁吸位置，之后一键切换。</p>}
               </div>
               <div className="settings-group widget-settings">
                 {WIDGET_KINDS.map(({ kind }) => {
