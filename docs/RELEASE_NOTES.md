@@ -36,7 +36,7 @@
 
 #### 其他
 
-- 核心测试新增小组件锁定/穿透归一化用例，总计 51 项。
+- 核心测试新增小组件锁定/穿透与习惯连续天数用例，总计 53 项。
 - 版本号统一为 0.1.3，Android `versionCode` 6。
 
 ### 修复内容
@@ -79,7 +79,7 @@
 
 ```powershell
 npm run typecheck   # core / desktop / mobile 均通过
-npm test            # 3 个测试文件，51 项用例通过
+npm test            # 3 个测试文件，53 项用例通过
 npm run dist -w @focusnotes/desktop  # 生成 Setup 0.1.3
 gradlew assembleRelease  # APK 0.1.3，versionCode 6
 npm run sign:apk     # 严格 zipalign + apksigner，v1/v2/v3 通过

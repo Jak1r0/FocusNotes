@@ -147,7 +147,7 @@ npm test
 npm run build
 ```
 
-核心包测试位于 `packages/core/tests/`，当前包含 `core.test.ts`、`features.test.ts` 与 `memo-sync.test.ts`，共 51 项用例。
+核心包测试位于 `packages/core/tests/`，当前包含 `core.test.ts`、`features.test.ts` 与 `memo-sync.test.ts`，共 53 项用例。
 
 ## 数据与隐私
 
