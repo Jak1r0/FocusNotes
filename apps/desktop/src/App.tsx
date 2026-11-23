@@ -100,6 +100,10 @@ export default function App() {
     const value = Number(localStorage.getItem('focusnotes.blur') ?? 14)
     return Number.isFinite(value) ? Math.min(32, Math.max(0, Math.round(value))) : 14
   })
+  const [glassBackground, setGlassBackground] = useState<'system' | 'image'>(() => window.localStorage.getItem('focusnotes.glassBackground') === 'image' ? 'image' : 'system')
+  const [glassImage, setGlassImage] = useState<string | null>(null)
+  const [backgroundBusy, setBackgroundBusy] = useState(false)
+  const [backgroundError, setBackgroundError] = useState('')
   const [widgetEnabled, setWidgetEnabled] = useState(() => loadBool('focusnotes.widget', true))
   const [widgetDisplayMode, setWidgetDisplayMode] = useState<WidgetDisplayMode>('normal')
   const [widgetModePending, setWidgetModePending] = useState(false)
@@ -175,6 +179,52 @@ export default function App() {
     window.localStorage.setItem('focusnotes.effect', windowEffect)
   }, [windowEffect])
   useEffect(() => { window.localStorage.setItem('focusnotes.blur', String(windowBlur)) }, [windowBlur])
+  useEffect(() => {
+    let alive = true
+    const load = () => {
+      void window.focusDesktop?.background.get().then((result) => {
+        if (alive) {
+          setGlassImage(result.image ?? null)
+          setGlassBackground(result.mode === 'image' ? 'image' : 'system')
+        }
+      }).catch(() => undefined)
+    }
+    load()
+    window.addEventListener('focus', load)
+    return () => {
+      alive = false
+      window.removeEventListener('focus', load)
+    }
+  }, [])
+  useEffect(() => {
+    window.localStorage.setItem('focusnotes.glassBackground', glassBackground)
+    const material = windowEffect !== 'solid' && glassBackground === 'system' ? 'acrylic' : 'none'
+    window.focusDesktop?.setBackgroundMaterial(material)
+    void window.focusDesktop?.background.setMode(glassBackground)
+  }, [glassBackground, windowEffect])
+  const pickGlassBackground = useCallback(async () => {
+    setBackgroundBusy(true)
+    setBackgroundError('')
+    try {
+      const result = await window.focusDesktop?.background.pick()
+      if (result?.ok) {
+        setGlassImage(result.image ?? null)
+        setGlassBackground('image')
+      } else if (!result?.canceled) {
+        setBackgroundError(result?.error || '选择背景图片失败。')
+      }
+    } catch (error) {
+      setBackgroundError(error instanceof Error ? error.message : '选择背景图片失败。')
+    } finally {
+      setBackgroundBusy(false)
+    }
+  }, [])
+  const clearGlassBackground = useCallback(async () => {
+    await window.focusDesktop?.background.clear()
+    setGlassImage(null)
+    setGlassBackground('system')
+    setBackgroundError('')
+  }, [])
   useEffect(() => {
     window.focusDesktop?.setWidgetEnabled(widgetEnabled)
     window.localStorage.setItem('focusnotes.widget', String(widgetEnabled))
@@ -455,6 +505,7 @@ export default function App() {
       habits={ws.extras.habits}
       habitLogs={ws.extras.habitLogs}
       onToggle={ws.toggleHabit}
+      onMark={ws.markHabit}
       onAdd={ws.addHabit}
       onUpdate={ws.updateHabit}
       onDelete={ws.removeHabit}
@@ -611,6 +662,13 @@ export default function App() {
     opacity={opacity}
     windowEffect={windowEffect}
     windowBlur={windowBlur}
+    glassBackground={glassBackground}
+    glassImage={glassImage}
+    backgroundBusy={backgroundBusy}
+    backgroundError={backgroundError}
+    onGlassBackground={(mode) => { setGlassBackground(mode); setBackgroundError('') }}
+    onPickGlassBackground={pickGlassBackground}
+    onClearGlassBackground={clearGlassBackground}
     widgetEnabled={widgetEnabled}
     remindersEnabled={remindEnabled}
     leadMinutes={leadMinutes}
@@ -647,7 +705,7 @@ export default function App() {
 
   if (mini) {
     return <div className={`app-shell mini effect-${windowEffect}`}>
-      {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} />}
+      {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} mode={glassBackground} image={glassImage} />}
       <MiniTopBar onExpand={() => setMini(false)} onMinimize={() => window.focusDesktop?.minimize()} onClose={() => window.focusDesktop?.close()} />
       <main className="mini-content">
         <div className="mini-head">
@@ -670,7 +728,7 @@ export default function App() {
   }
 
   return <div className={`app-shell effect-${windowEffect}`}>
-    {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} />}
+    {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} mode={glassBackground} image={glassImage} />}
     <IconRail
       view={view}
       theme={dark ? 'dark' : 'light'}

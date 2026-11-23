@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Check, Flame, Plus, Sparkles } from 'lucide-react'
+import { Check, CalendarPlus, Flame, Plus, Sparkles } from 'lucide-react'
 import {
   addDays,
   dateKey,
   habitStreak,
+  isDateKey,
   isHabitScheduled,
   startOfDay,
   type Habit,
@@ -14,6 +15,7 @@ interface HabitsViewProps {
   habits: Habit[]
   habitLogs: Record<string, string[]>
   onToggle: (habitId: string, day: string) => void
+  onMark: (habitId: string, day: string) => void
   onAdd: (habit: Habit) => void
   onUpdate: (habit: Habit) => void
   onDelete: (habitId: string) => void
@@ -21,11 +23,14 @@ interface HabitsViewProps {
 
 const WEEK_LABELS = ['一', '二', '三', '四', '五', '六', '日']
 
-export function HabitsView({ habits, habitLogs, onToggle, onAdd, onUpdate, onDelete }: HabitsViewProps) {
+export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdate, onDelete }: HabitsViewProps) {
   const [editing, setEditing] = useState<Habit | null>(null)
   const [creating, setCreating] = useState(false)
+  const [makeupFor, setMakeupFor] = useState<string | null>(null)
+  const [makeupError, setMakeupError] = useState('')
   const now = new Date()
   const today = dateKey(now)
+  const [makeupDate, setMakeupDate] = useState(dateKey(addDays(startOfDay(now), -1)))
   const monday = addDays(startOfDay(now), -((now.getDay() + 6) % 7))
   const week = Array.from({ length: 7 }, (_, index) => addDays(monday, index))
 
@@ -129,15 +134,45 @@ export function HabitsView({ habits, habitLogs, onToggle, onAdd, onUpdate, onDel
                     </div>
 
                     <div className="habit-foot">
-                      <span className="habit-streak"><Flame size={13} /> 连续 {streak} 天</span>
-                      <button
-                        className={`habit-check${done ? ' done' : ''}`}
-                        onClick={() => scheduledToday && onToggle(habit.id, today)}
-                        disabled={!scheduledToday}
-                      >
-                        {done ? <><Check size={14} /> 今日已打卡</> : scheduledToday ? '今日打卡' : '今天休息'}
-                      </button>
+                      <span className="habit-streak"><Flame size={13} /> 连续 {streak} 天{habit.bestStreak > streak ? ` · 最佳 ${habit.bestStreak} 天` : ''}</span>
+                      <div className="habit-foot-actions">
+                        <button
+                          className={`habit-check${done ? ' done' : ''}`}
+                          onClick={() => scheduledToday && onToggle(habit.id, today)}
+                          disabled={!scheduledToday}
+                        >
+                          {done ? <><Check size={14} /> 今日已打卡</> : scheduledToday ? '今日打卡' : '今天休息'}
+                        </button>
+                        <button className="habit-makeup-toggle"
+                          onClick={() => {
+                            setMakeupFor((current) => current === habit.id ? null : habit.id)
+                            setMakeupError('')
+                            setMakeupDate(dateKey(addDays(startOfDay(now), -1)))
+                          }}>
+                          <CalendarPlus size={12} /> 补卡
+                        </button>
+                      </div>
                     </div>
+                    {makeupFor === habit.id && (
+                      <div className="habit-makeup">
+                        <input type="date" max={today} min={habit.startDate} value={makeupDate}
+                          aria-label={`${habit.name} 补卡日期`}
+                          onChange={(event) => { setMakeupDate(event.target.value); setMakeupError('') }} />
+                        <button className="secondary-button" disabled={logs.includes(makeupDate)}
+                          onClick={() => {
+                            if (!isDateKey(makeupDate) || makeupDate > today) { setMakeupError('请选择今天或更早的有效日期。'); return }
+                            if (!isHabitScheduled(habit, new Date(`${makeupDate}T00:00:00`))) { setMakeupError('该日期不是习惯计划日。'); return }
+                            if (logs.includes(makeupDate)) { setMakeupError('该日期已打卡。'); return }
+                            onMark(habit.id, makeupDate)
+                            setMakeupFor(null)
+                            setMakeupError('')
+                          }}>
+                          {logs.includes(makeupDate) ? '已打卡' : '登记'}
+                        </button>
+                        <button className="secondary-button" onClick={() => setMakeupFor(null)}>取消</button>
+                        {makeupError && <span className="habit-makeup-error" role="alert">{makeupError}</span>}
+                      </div>
+                    )}
                   </article>
                 )
               })}

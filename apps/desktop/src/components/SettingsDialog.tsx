@@ -58,6 +58,10 @@ interface SettingsDialogProps {
   opacity: number
   windowEffect: WindowEffect
   windowBlur: number
+  glassBackground: 'system' | 'image'
+  glassImage: string | null
+  backgroundBusy: boolean
+  backgroundError: string
   widgetEnabled: boolean
   widgetDisplayMode: WidgetDisplayMode
   widgetModePending: boolean
@@ -73,6 +77,9 @@ interface SettingsDialogProps {
   onOpacity: (value: number) => void
   onWindowEffect: (effect: WindowEffect) => void
   onWindowBlur: (blur: number) => void
+  onGlassBackground: (mode: 'system' | 'image') => void
+  onPickGlassBackground: () => void
+  onClearGlassBackground: () => void
   onWidgetEnabled: (enabled: boolean) => void
   onWidgetDisplayMode: (mode: WidgetDisplayMode) => void
   widgetPresets: WidgetPreset[]
@@ -285,6 +292,25 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 <span className="settings-label">窗口质感</span>
                 <EffectPicker value={props.windowEffect} onChange={props.onWindowEffect} />
                 {props.windowEffect !== 'solid' && <BlurControl value={props.windowBlur} onChange={props.onWindowBlur} />}
+              </div>
+              <div className="settings-group">
+                <label className="settings-row">
+                  <span><strong>玻璃背景</strong><small>系统下层/桌面图像，或自定义图片</small></span>
+                  <select value={props.glassBackground} onChange={(event) => props.onGlassBackground(event.target.value as 'system' | 'image')}>
+                    <option value="system">系统下层模糊</option>
+                    <option value="image">自定义图片</option>
+                  </select>
+                </label>
+                {props.glassBackground === 'image' && (
+                  <div className="background-actions">
+                    <button className="secondary-button" disabled={props.backgroundBusy} onClick={props.onPickGlassBackground}>
+                      {props.glassImage ? '更换图片' : '选择图片'}
+                    </button>
+                    {props.glassImage && <button className="secondary-button" onClick={props.onClearGlassBackground}>清除</button>}
+                    {props.backgroundError && <p className="form-error" role="alert">{props.backgroundError}</p>}
+                    {props.glassImage && <img className="background-preview" src={props.glassImage} alt="自定义玻璃背景预览" />}
+                  </div>
+                )}
               </div>
               <div className="settings-group">
                 <label className="settings-row">

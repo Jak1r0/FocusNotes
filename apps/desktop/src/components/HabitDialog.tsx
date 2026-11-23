@@ -58,6 +58,8 @@ export function HabitDialog({ habit, onClose, onSave, onDelete }: HabitDialogPro
       autoLog,
       archived: habit?.archived ?? false,
       createdAt: habit?.createdAt ?? new Date().toISOString(),
+      streak: habit?.streak ?? 0,
+      bestStreak: habit?.bestStreak ?? 0,
     })
     onClose()
   }

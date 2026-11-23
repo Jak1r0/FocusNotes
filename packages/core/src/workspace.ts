@@ -353,6 +353,8 @@ function normalizeHabit(value: unknown): Habit | null {
     autoLog: Boolean(record.autoLog),
     archived: Boolean(record.archived),
     createdAt: typeof record.createdAt === 'string' ? record.createdAt : new Date().toISOString(),
+    streak: numberIn(record.streak, 0, 0, 10000),
+    bestStreak: numberIn(record.bestStreak, 0, 0, 10000),
   }
 }
 
@@ -415,6 +417,13 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
       }
       habitLogs[habit.id] = [...days].sort()
     }
+  }
+
+  // 连续天数以每日打卡记录为权威来源重算；历史最佳值保留较大者。
+  for (const habit of habits) {
+    const current = habitStreak(habit, habitLogs[habit.id] ?? [])
+    habit.streak = current
+    habit.bestStreak = Math.max(habit.bestStreak, current)
   }
 
   const focusSessions: FocusSession[] = []

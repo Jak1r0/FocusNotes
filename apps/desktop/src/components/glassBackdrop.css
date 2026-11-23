@@ -11,3 +11,5 @@
   filter: blur(var(--glass-blur, 14px)) var(--glass-tone, grayscale(0));
   opacity: var(--glass-image-opacity, .24);
 }
+/* 系统下层模糊模式：不读取壁纸，露出窗口下方的系统 acrylic 背景。 */
+.glass-backdrop.system { background-image: none; opacity: 0; filter: none; }

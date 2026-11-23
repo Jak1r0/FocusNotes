@@ -57,7 +57,26 @@ export function WidgetWindow() {
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
+  const [glassBackground, setGlassBackground] = useState<'system' | 'image'>('system')
+  const [glassImage, setGlassImage] = useState<string | null>(null)
   const material = data?.appearance.material ?? 'frosted'
+
+  useEffect(() => {
+    let alive = true
+    const load = () => {
+      void window.focusDesktop?.background.get().then((result) => {
+        if (!alive) return
+        setGlassBackground(result.mode === 'image' ? 'image' : 'system')
+        setGlassImage(result.image ?? null)
+      }).catch(() => undefined)
+    }
+    load()
+    window.addEventListener('focus', load)
+    return () => {
+      alive = false
+      window.removeEventListener('focus', load)
+    }
+  }, [])
 
   useEffect(() => {
     const off = window.focusDesktop?.widget.onData(setData)
@@ -111,7 +130,7 @@ export function WidgetWindow() {
   const todayDate = useMemo(() => (data ? startOfDay(new Date(`${data.today}T00:00:00`)) : startOfDay(new Date())), [data])
 
   return <div className="widget-window" data-material={material}>
-    {material !== 'classic' && <GlassBackdrop blur={data?.appearance.glassBlur ?? 14} />}
+    {material !== 'classic' && <GlassBackdrop blur={data?.appearance.glassBlur ?? 14} mode={glassBackground} image={glassImage} />}
     <header className="widget-grip">
       <button className="widget-close" onClick={() => window.focusDesktop?.widget.close()} aria-label="关闭小部件"><X size={10} /></button>
     </header>

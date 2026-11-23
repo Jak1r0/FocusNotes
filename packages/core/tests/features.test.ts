@@ -186,3 +186,24 @@ describe('normalizeExtras widget input preferences', () => {
     expect(out.preferences.widget.clickThrough).toBe(false)
   })
 })
+describe('normalizeExtras habit streak persistence', () => {
+  it('recomputes current streak from logs and keeps the best streak', () => {
+    const out = normalizeExtras({
+      version: 2,
+      habits: [{ id: 'read', name: '阅读', frequency: 'daily', startDate: '2026-11-20', bestStreak: 9, streak: 0 }],
+      habitLogs: { read: ['2026-11-22', '2026-11-23'] },
+    } as never, new Date('2026-11-23T12:00:00'))
+    expect(out.habits[0]!.streak).toBe(2)
+    expect(out.habits[0]!.bestStreak).toBe(9)
+  })
+
+  it('fills new streak fields for legacy habits', () => {
+    const out = normalizeExtras({
+      version: 2,
+      habits: [{ id: 'walk', name: '散步', frequency: 'daily', startDate: '2026-11-23' }],
+      habitLogs: { walk: ['2026-11-23'] },
+    } as never, new Date('2026-11-23T12:00:00'))
+    expect(out.habits[0]!.streak).toBe(1)
+    expect(out.habits[0]!.bestStreak).toBe(1)
+  })
+})

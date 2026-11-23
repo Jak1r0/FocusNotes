@@ -599,7 +599,16 @@ export default function App() {
             <HabitsView
               habits={extras.habits}
               habitLogs={extras.habitLogs}
-              onToggle={(habitId, day) => run(updateExtras((current) => ({ ...current, habitLogs: { ...current.habitLogs, [habitId]: toggleHabitLog(current.habitLogs[habitId] ?? [], day) } })))}
+              onToggle={(habitId, day) => run(updateExtras((current) => {
+                const logs = toggleHabitLog(current.habitLogs[habitId] ?? [], day)
+                const habit = current.habits.find((item) => item.id === habitId)
+                const streak = habit ? habitStreak(habit, logs, new Date()) : 0
+                return {
+                  ...current,
+                  habits: current.habits.map((item) => item.id === habitId ? { ...item, streak, bestStreak: Math.max(item.bestStreak || 0, streak) } : item),
+                  habitLogs: { ...current.habitLogs, [habitId]: logs },
+                }
+              }))}
               onAdd={(habit) => run(updateExtras((current) => ({ ...current, habits: [...current.habits, habit], habitLogs: { ...current.habitLogs, [habit.id]: [] } })))}
               onUpdate={(habit) => run(updateExtras((current) => ({ ...current, habits: current.habits.map((item) => item.id === habit.id ? habit : item) })))}
               onDelete={(habitId) => { run(updateExtras((current) => { const habitLogs = { ...current.habitLogs }; delete habitLogs[habitId]; return { ...current, habits: current.habits.filter((habit) => habit.id !== habitId), habitLogs } })) }}

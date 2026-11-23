@@ -1,24 +1,12 @@
-import { useEffect, useState, type CSSProperties } from 'react'
+import type { CSSProperties } from 'react'
 import './glassBackdrop.css'
 
-export function GlassBackdrop({ blur }: { blur: number }) {
-  const [wallpaper, setWallpaper] = useState<string | null>(null)
-  useEffect(() => {
-    let alive = true
-    const update = () => {
-      void window.focusDesktop?.glassWallpaper?.().then((image) => {
-        if (alive) setWallpaper(image)
-      }).catch(() => undefined)
-    }
-    update()
-    window.addEventListener('focus', update)
-    return () => {
-      alive = false
-      window.removeEventListener('focus', update)
-    }
-  }, [])
-  return <div aria-hidden="true" className="glass-backdrop" style={{
+export type GlassBackdropMode = 'system' | 'image'
+
+export function GlassBackdrop({ blur, mode = 'system', image = null }: { blur: number; mode?: GlassBackdropMode; image?: string | null }) {
+  const system = mode === 'system' || !image
+  return <div aria-hidden="true" className={`glass-backdrop${system ? ' system' : ''}`} style={{
     '--glass-blur': `${blur}px`,
-    backgroundImage: wallpaper ? `url("${wallpaper}")` : undefined,
+    backgroundImage: system ? undefined : `url("${image}")`,
   } as CSSProperties} />
 }

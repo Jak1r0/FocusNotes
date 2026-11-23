@@ -22,6 +22,13 @@
 - 新增布局预设：保存、应用、删除“显示方式 + 材质 + 玻璃参数 + 字号 + 磁吸 + 动效”，最多 8 个。
 - 固定到桌面时忽略磁吸位置，使用记住的自定义位置；窗口尺寸变化不再被磁吸覆盖。
 
+#### 习惯与玻璃背景
+
+- 习惯 JSON 新增 `streak`（当前连续天数）与 `bestStreak`（历史最佳），打卡、补卡后立即重算并随备份/同步保存。
+- 桌面习惯卡片新增「补卡」入口，可为过去的计划日补登记；已打卡日期会阻止重复登记。
+- 客户端与小组件玻璃背景不再读取桌面壁纸：默认使用系统 acrylic 让窗口下方应用/桌面透出，也支持选择本地图片作为自定义背景。
+- 自定义背景会复制到应用数据目录并限制 32MB，最长边缩放到 1920px；支持 PNG/JPG/BMP。
+
 #### 发布工具
 
 - 新增 `npm run sign:apk`：严格 `zipalign`（16K 页对齐）→ `apksigner`（v1/v2/v3，v4 关闭），密码从环境变量、密码文件或 `local.properties` 读取，不打印密码。
@@ -43,10 +50,10 @@
 
 ### 兼容性
 
-- **数据格式**：`WidgetPreferences` 新增 `locked` / `clickThrough`，旧数据默认 `false`。
+- 数据格式：`WidgetPreferences` 新增 `locked` / `clickThrough`；`Habit` 新增 `streak` / `bestStreak`，旧数据默认 0 并按 `habitLogs` 重算。
 - **Windows**：Windows 10/11 x64；桌面模式依赖系统 PowerShell。
 - **Android**：Android 7.0（API 24）及以上，`versionCode` 6，可从 0.1.2 覆盖；2.x 需卸载重装。
-- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `2a7333871699d2058ffeaf8be112d9b26e046e0d869aa3f0535007682fbd6f21`。
+- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `b3e322630ee49fede771160233ca1c5c9f126e024e805562911557f665d77cb5`。
 - **验签附件**：`FocusNotes-0.1.3-cert.pem` 为公钥证书，`FocusNotes-0.1.3.apk.sha256` 为 APK 校验文件；私钥 keystore 不公开。
 
 ### 升级注意事项
@@ -62,7 +69,7 @@
 
 - Android 习惯提醒时间当前仅保存，不发送本地通知。
 - 桌面固定模式依赖 Windows Explorer；Explorer 重启后最多 15 秒恢复。
-- 桌面壁纸背景仅在 Windows 下可用。
+- 系统 acrylic 玻璃背景依赖 Windows 11 与显卡驱动；不支持时回退为半透明底色。
 - Gitee 同步为整文件提交，冲突时需要重新拉取后再提交。
 - R8 代码混淆与资源压缩尚未启用。
 

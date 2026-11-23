@@ -86,7 +86,13 @@ declare global {
   interface Window {
     focusDesktop?: {
       minimize(): void
-      glassWallpaper(): Promise<string | null>
+      setBackgroundMaterial(material: 'acrylic' | 'none'): void
+      background: {
+        get(): Promise<{ image: string | null; mode: 'system' | 'image' }>
+        pick(): Promise<{ ok: boolean; image?: string; error?: string; canceled?: boolean }>
+        clear(): Promise<{ ok: boolean }>
+        setMode(mode: 'system' | 'image'): Promise<{ ok: boolean; mode?: 'system' | 'image' }>
+      }
       close(): void
       setAlwaysOnTop(value: boolean): void
       setOpacity(value: number): void

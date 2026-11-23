@@ -3,7 +3,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
 const { execFile } = require('node:child_process')
-const { glassWallpaper } = require('./wallpaper.cjs')
+const { initBackground, getBackground, setBackgroundMode, pickBackground, clearBackground } = require('./background.cjs')
 
 const development = !app.isPackaged
 app.setName(development ? 'FocusNotes Dev' : 'FocusNotes')
@@ -378,6 +378,7 @@ function createWindow() {
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
+    backgroundMaterial: 'acrylic',
     alwaysOnTop: true,
     resizable: true,
     show: false,
@@ -508,7 +509,7 @@ const FONT_FAMILIES = {
 /* ── 小部件磁吸：桌面边角 / 跟随前台应用窗口 ─────────────── */
 
 const widgetMaterials = ['classic', 'frosted', 'liquid']
-const widgetPrefs = { opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false }
+const widgetPrefs = { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false }
 const initialWidgetSize = { width: 168, height: 216 }
 let widgetSize = initialWidgetSize
 let snapTimer = null
@@ -693,10 +694,18 @@ function applyWidgetAppearance(prefs) {
     if (typeof prefs.snap === 'string') widgetPrefs.snap = prefs.snap
     if (['full', 'light', 'off'].includes(prefs.motion)) widgetPrefs.motion = prefs.motion
     if (Number.isFinite(Number(prefs.fontSize))) widgetPrefs.fontSize = Math.min(140, Math.max(80, Number(prefs.fontSize)))
+    if (['classic', 'frosted', 'liquid'].includes(prefs.material)) widgetPrefs.material = prefs.material
     if (typeof prefs.locked === 'boolean') widgetPrefs.locked = prefs.locked
     if (typeof prefs.clickThrough === 'boolean') widgetPrefs.clickThrough = prefs.clickThrough
   }
   if (!widgetWindow || widgetWindow.isDestroyed()) return
+  try {
+    if (typeof widgetWindow.setBackgroundMaterial === 'function') {
+      widgetWindow.setBackgroundMaterial(widgetPrefs.material === 'classic' ? 'none' : 'acrylic')
+    }
+  } catch {
+    // 非 Windows 或不支持系统材质的桌面环境忽略。
+  }
   try {
     widgetWindow.setMovable(!widgetPrefs.locked)
     widgetWindow.setFocusable(!widgetPrefs.clickThrough)
@@ -767,6 +776,7 @@ function createWidgetWindow() {
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
+    backgroundMaterial: 'acrylic',
     resizable: true,
     skipTaskbar: true,
     show: false,
@@ -839,9 +849,32 @@ function createTray() {
 }
 
 function registerIpc() {
-  ipcMain.handle('window:glass-wallpaper', (event) => {
-    if (event.sender !== mainWindow?.webContents && event.sender !== widgetWindow?.webContents) return null
-    return glassWallpaper()
+  ipcMain.handle('background:get', (event) => {
+    if (event.sender !== mainWindow?.webContents && event.sender !== widgetWindow?.webContents) return { image: null }
+    return getBackground()
+  })
+  ipcMain.handle('background:pick', async (event) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false, canceled: true }
+    return pickBackground(mainWindow)
+  })
+  ipcMain.handle('background:clear', (event) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false }
+    return clearBackground()
+  })
+  ipcMain.handle('background:set-mode', (event, mode) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false }
+    return setBackgroundMode(mode)
+  })
+  ipcMain.on('window:set-background-material', (event, material) => {
+    if (event.sender !== mainWindow?.webContents) return
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    try {
+      if (typeof mainWindow.setBackgroundMaterial === 'function') {
+        mainWindow.setBackgroundMaterial(material === 'acrylic' ? 'acrylic' : 'none')
+      }
+    } catch {
+      // 非 Windows 或不支持系统材质的桌面环境忽略。
+    }
   })
   ipcMain.on('window:minimize', () => hideToTray(true))
   ipcMain.on('window:close', () => hideToTray(false))
@@ -1320,6 +1353,7 @@ if (gotLock) {
     loadFired()
     ensureProfiles()
     loadWidgetState()
+    initBackground()
     createWindow()
     createWidgetWindow()
     createTray()

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   createDefaultExtras,
+  dateKey,
+  habitStreak,
+  isDateKey,
+  isHabitScheduled,
   normalizeExtras,
   normalizeTodos,
   TodoStore,
@@ -48,6 +52,7 @@ export interface WorkspaceApi {
   updateExtras(patch: (current: WorkspaceExtras) => WorkspaceExtras): void
   replaceAll(todos: TodoItem[], extras: WorkspaceExtras, profileId: string): Promise<void>
   toggleHabit(habitId: string, day: string): void
+  markHabit(habitId: string, day: string): void
   addHabit(habit: Habit): void
   updateHabit(habit: Habit): void
   removeHabit(habitId: string): void
@@ -63,6 +68,18 @@ function localExtras(): WorkspaceExtras {
     return normalizeExtras(raw ? JSON.parse(raw) : null)
   } catch {
     return createDefaultExtras()
+  }
+}
+
+function withHabitStreak(current: WorkspaceExtras, habitId: string, logs: string[]): WorkspaceExtras {
+  const habit = current.habits.find((item) => item.id === habitId)
+  const streak = habit ? habitStreak(habit, logs) : 0
+  return {
+    ...current,
+    habits: current.habits.map((item) => item.id === habitId
+      ? { ...item, streak, bestStreak: Math.max(item.bestStreak || 0, streak) }
+      : item),
+    habitLogs: { ...current.habitLogs, [habitId]: logs },
   }
 }
 
@@ -218,13 +235,21 @@ export function useWorkspace(): WorkspaceApi {
   const purgeTrash = useCallback(() => store.purgeTrash(), [store])
 
   const toggleHabit = useCallback((habitId: string, day: string) => {
-    updateExtras((current) => ({
-      ...current,
-      habitLogs: {
-        ...current.habitLogs,
-        [habitId]: toggleHabitLog(current.habitLogs[habitId] ?? [], day),
-      },
-    }))
+    updateExtras((current) => {
+      const logs = toggleHabitLog(current.habitLogs[habitId] ?? [], day)
+      return withHabitStreak(current, habitId, logs)
+    })
+  }, [updateExtras])
+
+  const markHabit = useCallback((habitId: string, day: string) => {
+    if (!isDateKey(day) || day > dateKey(new Date())) return
+    updateExtras((current) => {
+      const habit = current.habits.find((item) => item.id === habitId)
+      if (!habit || !isHabitScheduled(habit, new Date(`${day}T00:00:00`))) return current
+      const logs = current.habitLogs[habitId] ?? []
+      if (logs.includes(day)) return current
+      return withHabitStreak(current, habitId, [...logs, day].sort())
+    })
   }, [updateExtras])
 
   const addHabit = useCallback((habit: Habit) => {
@@ -315,6 +340,7 @@ export function useWorkspace(): WorkspaceApi {
     updateExtras,
     replaceAll,
     toggleHabit,
+    markHabit,
     addHabit,
     updateHabit,
     removeHabit,

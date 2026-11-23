@@ -79,6 +79,10 @@ export interface Habit {
   autoLog: boolean
   archived: boolean
   createdAt: string
+  /** 当前连续打卡天数（由 habitLogs 重算后缓存，随 JSON 保存）。 */
+  streak: number
+  /** 历史最长连续打卡天数。 */
+  bestStreak: number
 }
 
 export interface FocusSession {
