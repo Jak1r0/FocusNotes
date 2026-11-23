@@ -1,5 +1,83 @@
 # FocusNotes 发布说明
 
+## 0.1.2（Windows / Android）
+
+发布日期：2026-11-23
+
+| 平台 | 版本号 | 说明 |
+| --- | --- | --- |
+| Windows | 0.1.2 | 安装包目录 `apps/desktop/release-011e` |
+| Android | 0.1.2（versionCode 5） | 可从 0.1.1 覆盖安装 |
+| 核心包 `@focusnotes/core` | 0.1.2 | 小组件偏好、保存队列、Gitee 合并 |
+
+### 主要变更
+
+#### Windows 桌面
+
+- 小组件新增毛玻璃、液态玻璃与经典材质，支持读取当前 Windows 壁纸作为背景，并提供雾面透明度、模糊强度、字号与动效强度设置。
+- 壁纸读取限制为 Windows、最大 32MB、最长边缩放至 1600px、30 秒缓存；读取失败时回退纯色。
+- 任务列表新增逾期分组与任务图标，任务行与列表视觉更新。
+- 设置面板改版：深浅模式、动效强度、小组件材质与玻璃参数、界面缩放等。
+- 小组件窗口尺寸持久化，吸附与跟随前台应用窗口行为保留。
+- 工作区保存失败时在顶部提示具体错误并支持「重试」；切换档案时阻止把待办写入错误档案。
+- 开发模式使用独立 userData 与 AppID，避免与正式版数据冲突。
+
+#### 同步与核心
+
+- Gitee `push` 支持 `mergeRemote`：提交前合并远端数据，降低多设备覆盖冲突。
+- 新增远端文件与本地档案的绑定校验，避免同一 Gitee 文件被多个档案覆盖。
+- `TodoStore` 支持 `prepareWrite` 预捕获写入档案，异步写入队列不会因档案切换写错位置。
+- `WidgetPreferences` 新增 `material`、`glassTransparency`、`glassBlur`；旧 `opacity` 自动映射为雾面透明度。
+- 核心测试新增 2 项，总计 49 项。
+
+#### Android
+
+- 版本号更新为 0.1.2（`versionCode` 5）。
+- 功能与 0.1.1 一致，重新构建并启用 v1 / v2 / v3 单文件签名。
+
+### 修复内容
+
+- 修复桌面保存失败被静默吞掉、用户无法感知的问题。
+- 修复切换档案时异步写入可能落到新档案的问题。
+- 修复 Gitee 提交直接覆盖远端、可能丢失其他设备修改的问题。
+- 修复小组件数据重复计算与壁纸读取缺少大小、尺寸限制的问题。
+- 修复旧版小组件透明度设置无法映射到新玻璃材质的问题。
+
+### 兼容性
+
+- **数据格式**：`WidgetPreferences` 新增字段，旧数据自动迁移；0.1.2 可读取 0.1.1 备份。
+- **Windows**：Windows 10/11 x64；覆盖安装保留本地数据。
+- **Android**：Android 7.0（API 24）及以上，`versionCode` 5，可从 0.1.1 / 0.1.0 覆盖；2.x 版本仍需卸载重装。
+- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `42b895e05f1d1a69a3d07730890c76e0e8bbd4631e347d3e6f03682a1084f53f`。
+- **验签附件**：`FocusNotes-0.1.2-cert.pem` 为公钥证书，`FocusNotes-0.1.2.apk.sha256` 为 APK 校验文件；私钥 keystore 不公开。
+
+### 升级注意事项
+
+1. 升级前导出 JSON 备份。
+2. Android 0.1.1 / 0.1.0 → 0.1.2 使用相同证书且 `versionCode` 更高，可直接覆盖；2.x 需先卸载。
+3. Windows 覆盖安装保留数据；壁纸背景首次加载可能有短暂延迟。
+4. Gitee 同步建议先拉取再修改；自动提交会合并远端，但并发编辑仍可能冲突。
+5. Windows 与 Android 均需授予通知权限；Windows 安装包未做代码签名。
+
+### 已知限制
+
+- Android 习惯提醒时间当前仅保存，不发送本地通知。
+- 桌面壁纸背景仅在 Windows 下可用，其他平台回退纯色。
+- Gitee 同步为整文件提交，冲突时需要重新拉取后再提交。
+- R8 代码混淆与资源压缩尚未启用。
+
+### 验证记录
+
+本次发布前已执行：
+
+```powershell
+npm run typecheck   # core / desktop / mobile 均通过
+npm test            # 3 个测试文件，49 项用例通过
+npm run build       # core 与 desktop 构建通过
+npm run dist -w @focusnotes/desktop  # 生成 Setup 0.1.2
+gradlew assembleRelease  # APK 0.1.2，v1/v2/v3 签名
+```
+
 ## 0.1.1（Windows / Android）
 
 发布日期：2026-11-19
