@@ -1,13 +1,14 @@
 import { useMemo, useState } from 'react'
-import { Alert, StyleSheet } from 'react-native'
+import { Alert, Modal, StyleSheet, TextInput } from 'react-native'
 import { ThemedPressable as Pressable, ThemedText as Text, ThemedView as View } from '../theme'
-import { addDays, dateKey, habitStreak, isHabitScheduled, startOfDay, type Habit } from '@focusnotes/core'
+import { addDays, dateKey, habitStreak, isDateKey, isHabitScheduled, startOfDay, type Habit } from '@focusnotes/core'
 import { HabitDialog } from './HabitDialog'
 
 interface Props {
   habits: Habit[]
   habitLogs: Record<string, string[]>
   onToggle(habitId: string, day: string): void
+  onMark(habitId: string, day: string): void
   onAdd(habit: Habit): void
   onUpdate(habit: Habit): void
   onDelete(habitId: string): void
@@ -15,9 +16,12 @@ interface Props {
 
 const WEEK = ['一', '二', '三', '四', '五', '六', '日']
 
-export function HabitsView({ habits, habitLogs, onToggle, onAdd, onUpdate, onDelete }: Props) {
+export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdate, onDelete }: Props) {
   const [editing, setEditing] = useState<Habit | null>(null)
   const [creating, setCreating] = useState(false)
+  const [makeupHabit, setMakeupHabit] = useState<Habit | null>(null)
+  const [makeupDate, setMakeupDate] = useState('')
+  const [makeupError, setMakeupError] = useState('')
   const todayDate = new Date()
   const today = dateKey(todayDate)
   const monday = addDays(startOfDay(todayDate), -((todayDate.getDay() + 6) % 7))
@@ -43,6 +47,17 @@ export function HabitsView({ habits, habitLogs, onToggle, onAdd, onUpdate, onDel
     ])
   }
 
+  function submitMakeup() {
+    const habit = makeupHabit
+    if (!habit) return
+    if (!isDateKey(makeupDate) || makeupDate > today) { setMakeupError('请输入今天或更早的有效日期。'); return }
+    if (!isHabitScheduled(habit, new Date(`${makeupDate}T00:00:00`))) { setMakeupError('该日期不是习惯计划日。'); return }
+    if ((habitLogs[habit.id] ?? []).includes(makeupDate)) { setMakeupError('该日期已打卡。'); return }
+    onMark(habit.id, makeupDate)
+    setMakeupHabit(null)
+    setMakeupError('')
+  }
+
   return <View style={styles.container}>
     <View style={styles.hero}>
       <View style={styles.heroRow}>
@@ -63,6 +78,7 @@ export function HabitsView({ habits, habitLogs, onToggle, onAdd, onUpdate, onDel
         const logs = habitLogs[habit.id] ?? []
         const done = logs.includes(today)
         const scheduled = isHabitScheduled(habit, todayDate)
+        const streak = habitStreak(habit, logs, todayDate)
         return <View key={habit.id} style={styles.card}>
           <View style={styles.cardHeader}>
             <Pressable style={styles.habitInfo} onPress={() => setEditing(habit)}>
@@ -85,14 +101,36 @@ export function HabitsView({ habits, habitLogs, onToggle, onAdd, onUpdate, onDel
             })}
           </View>
           <View style={styles.cardFooter}>
-            <Text style={styles.streak}>🔥 连续 {habitStreak(habit, logs, todayDate)} 天</Text>
-            <Pressable style={[styles.checkButton, done && styles.doneButton, !scheduled && styles.disabledButton]} disabled={!scheduled} onPress={() => onToggle(habit.id, today)}>
-              <Text style={[styles.checkButtonText, done && styles.doneText]}>{done ? '✓ 今日已打卡' : scheduled ? '今日打卡' : '今天休息'}</Text>
-            </Pressable>
+            <Text style={styles.streak}>🔥 连续 {streak} 天{habit.bestStreak > streak ? ` · 最佳 ${habit.bestStreak} 天` : ''}</Text>
+            <View style={styles.footerActions}>
+              <Pressable style={styles.makeupButton} onPress={() => { setMakeupHabit(habit); setMakeupDate(dateKey(addDays(startOfDay(todayDate), -1))); setMakeupError('') }}>
+                <Text style={styles.makeupButtonText}>补卡</Text>
+              </Pressable>
+              <Pressable style={[styles.checkButton, done && styles.doneButton, !scheduled && styles.disabledButton]} disabled={!scheduled} onPress={() => onToggle(habit.id, today)}>
+                <Text style={[styles.checkButtonText, done && styles.doneText]}>{done ? '✓ 今日已打卡' : scheduled ? '今日打卡' : '今天休息'}</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
       })}
     </View>)}
+
+    <Modal visible={Boolean(makeupHabit)} transparent animationType="fade" onRequestClose={() => setMakeupHabit(null)}>
+      <View style={styles.modalBackdrop}>
+        <View style={styles.makeupModal}>
+          <Text style={styles.makeupTitle}>补卡 · {makeupHabit?.name ?? ''}</Text>
+          <Text style={styles.makeupHint}>选择今天或更早的计划日；登记后连续天数自动重算。</Text>
+          <TextInput style={styles.makeupInput} value={makeupDate}
+            onChangeText={(value) => { setMakeupDate(value); setMakeupError('') }}
+            placeholder="YYYY-MM-DD" placeholderTextColor="#8e8d93" autoCapitalize="none" />
+          {makeupError ? <Text style={styles.makeupError}>{makeupError}</Text> : null}
+          <View style={styles.makeupActions}>
+            <Pressable style={styles.makeupCancel} onPress={() => setMakeupHabit(null)}><Text style={styles.makeupCancelText}>取消</Text></Pressable>
+            <Pressable style={styles.makeupSubmit} onPress={submitMakeup}><Text style={styles.makeupSubmitText}>登记补卡</Text></Pressable>
+          </View>
+        </View>
+      </View>
+    </Modal>
 
     {(creating || editing) && <HabitDialog
       habit={editing ?? undefined}
@@ -149,4 +187,18 @@ const styles = StyleSheet.create({
   disabledButton: { backgroundColor: '#f2f2f7' },
   checkButtonText: { color: '#fff', fontSize: 11, fontWeight: '600' },
   doneText: { color: '#248a52' },
+  footerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  makeupButton: { minHeight: 34, justifyContent: 'center', paddingHorizontal: 11, borderRadius: 17, backgroundColor: '#f2f2f7' },
+  makeupButtonText: { color: '#0071e3', fontSize: 11, fontWeight: '600' },
+  modalBackdrop: { flex: 1, justifyContent: 'center', padding: 24, backgroundColor: 'rgba(0,0,0,.32)' },
+  makeupModal: { padding: 18, borderRadius: 16, backgroundColor: '#fff' },
+  makeupTitle: { color: '#1d1d1f', fontSize: 16, fontWeight: '600' },
+  makeupHint: { marginTop: 6, color: '#8e8d93', fontSize: 11, lineHeight: 17 },
+  makeupInput: { marginTop: 14, paddingHorizontal: 12, paddingVertical: 9, color: '#1d1d1f', fontSize: 13, borderWidth: 1, borderColor: '#e5e5ea', borderRadius: 10, backgroundColor: '#f5f5f7' },
+  makeupError: { marginTop: 8, color: '#d70015', fontSize: 11 },
+  makeupActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 },
+  makeupCancel: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 14, borderRadius: 18, backgroundColor: '#f2f2f7' },
+  makeupCancelText: { color: '#6e6e73', fontSize: 12, fontWeight: '600' },
+  makeupSubmit: { minHeight: 36, justifyContent: 'center', paddingHorizontal: 16, borderRadius: 18, backgroundColor: '#0071e3' },
+  makeupSubmitText: { color: '#fff', fontSize: 12, fontWeight: '600' },
 })

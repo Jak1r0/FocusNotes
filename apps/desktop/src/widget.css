@@ -72,11 +72,13 @@ button { cursor: pointer; }
 .widget-grip {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
+  gap: 6px;
   flex: 0 0 23px;
   padding: 0 5px 0 7px;
   -webkit-app-region: drag;
 }
+.widget-motto { flex: 1; min-width: 0; overflow: hidden; color: var(--w-text); font-size: 8.5px; font-weight: 600; letter-spacing: .02em; opacity: .78; text-overflow: ellipsis; white-space: nowrap; }
 .widget-close { display: grid; place-items: center; width: 14px; height: 14px; padding: 0; color: var(--w-text); border: 0; border-radius: 4px; background: transparent; -webkit-app-region: no-drag; }
 .widget-close:hover { color: var(--w-text); background: rgba(128, 128, 128, .16); }
 
@@ -116,8 +118,11 @@ button { cursor: pointer; }
 .widget-agenda-row strong { font-weight: 550; }
 
 .widget-quadrants { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
-.widget-quadrant { display: flex; align-items: center; gap: 8px; padding: 5px 0; }
-.widget-quadrant svg { flex: 0 0 auto; }
+.widget-quadrant-axis { display: flex; justify-content: space-between; padding-bottom: 2px; color: var(--w-text); font-size: 7px; opacity: .5; }
+.widget-quadrant { display: flex; flex-direction: column; gap: 2px; min-width: 0; padding: 4px 0; }
+.widget-quadrant-label { overflow: hidden; font-size: 7.5px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.widget-quadrant-value { display: flex; align-items: center; gap: 5px; }
+.widget-quadrant-value svg { flex: 0 0 auto; }
 .widget-quadrant strong { font-weight: 650; font-variant-numeric: tabular-nums; }
 
 .widget-habit { display: flex; align-items: center; gap: 4px; min-height: 22px; font-size: 9px; }

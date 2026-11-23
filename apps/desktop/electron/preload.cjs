@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('focusDesktop', {
   },
   setAlwaysOnTop: (value) => ipcRenderer.send('window:set-always-on-top', value),
   setOpacity: (value) => ipcRenderer.send('window:set-opacity', value),
-  setMode: (mode) => ipcRenderer.send('window:set-mode', mode),
+  setIgnoreMouseEvents: (ignore, forward = true) => ipcRenderer.send('widget:set-ignore-mouse', { ignore, forward }),
   onNavigateView: (callback) => {
     const listener = (_event, view) => callback(view)
     ipcRenderer.on('navigate:view', listener)

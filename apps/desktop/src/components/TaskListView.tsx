@@ -96,9 +96,9 @@ export function TaskListView({
             </span>}
             <h3>{emptyTitle}</h3>
             {emptyHint && <p>{emptyHint}</p>}
-            {!trash && (
+            {!trash && !today && (
               <button className="ghost-button" onClick={onNewTask}>
-                <Plus size={14} /> {today ? '添加任务' : '新建任务'}
+                <Plus size={14} /> 新建任务
               </button>
             )}
           </div>

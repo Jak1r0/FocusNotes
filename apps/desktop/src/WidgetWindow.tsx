@@ -127,11 +127,36 @@ export function WidgetWindow() {
     try { await window.focusDesktop?.widget.toggleHabit(habitId, day) } catch { setMessage('同步失败') }
   }, [])
 
+  const motto = data?.appearance.motto?.trim() || 'Every Second Counts'
+
+  useEffect(() => {
+    const clickThrough = Boolean(data?.appearance.clickThrough)
+    if (!clickThrough) {
+      window.focusDesktop?.setIgnoreMouseEvents(false)
+      return
+    }
+    const interactive = (target: EventTarget | null) => target instanceof Element
+      && Boolean(target.closest('button, input, textarea, select, a, [role="button"], [data-interactive]'))
+    const onMove = (event: MouseEvent) => {
+      window.focusDesktop?.setIgnoreMouseEvents(!interactive(event.target), true)
+    }
+    const onLeave = () => window.focusDesktop?.setIgnoreMouseEvents(true, true)
+    window.focusDesktop?.setIgnoreMouseEvents(true, true)
+    window.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseleave', onLeave)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseleave', onLeave)
+      window.focusDesktop?.setIgnoreMouseEvents(false)
+    }
+  }, [data?.appearance.clickThrough])
+
   const todayDate = useMemo(() => (data ? startOfDay(new Date(`${data.today}T00:00:00`)) : startOfDay(new Date())), [data])
 
   return <div className="widget-window" data-material={material}>
     {material !== 'classic' && <GlassBackdrop blur={data?.appearance.glassBlur ?? 14} mode={glassBackground} image={glassImage} />}
     <header className="widget-grip">
+      <span className="widget-motto" title={motto}>{motto}</span>
       <button className="widget-close" onClick={() => window.focusDesktop?.widget.close()} aria-label="关闭小部件"><X size={10} /></button>
     </header>
 
@@ -171,14 +196,15 @@ export function WidgetWindow() {
         </Section>
 
         if (kind === 'quadrant') return <Section key={kind} kind={kind} onOpen={openView}>
+          <div className="widget-quadrant-axis" aria-hidden="true"><span>重要 →</span><span>紧急 ↓</span></div>
           <div className="widget-quadrants">
             {QUADRANT_GRID_ORDER.map((quadrant) => {
               const Icon = QUADRANT_ICONS[quadrant]
               const count = data?.quadrantCounts?.[quadrant] ?? 0
-              const label = QUADRANTS[quadrant].label
-              return <div key={quadrant} className="widget-quadrant" role="img" aria-label={`${label}，${count} 项`} title={label}>
-                <Icon size={16} aria-hidden="true" focusable="false" />
-                <strong>{count}</strong>
+              const meta = QUADRANTS[quadrant]
+              return <div key={quadrant} className="widget-quadrant" role="img" aria-label={`${meta.label}，${count} 项`} title={meta.label}>
+                <span className="widget-quadrant-label" style={{ color: meta.color }}>{meta.shortLabel}</span>
+                <span className="widget-quadrant-value"><Icon size={13} aria-hidden="true" focusable="false" /><strong>{count}</strong></span>
               </div>
             })}
           </div>

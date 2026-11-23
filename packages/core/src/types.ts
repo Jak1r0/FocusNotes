@@ -121,6 +121,18 @@ export interface WidgetPreferences {
   locked: boolean
   /** 桌面模式下鼠标点击穿透到下层窗口。 */
   clickThrough: boolean
+  /** 小组件顶部格言，默认 Every Second Counts。 */
+  motto: string
+}
+
+/** 桌面小组件布局预设，随个人档案 JSON 保存。 */
+export interface WidgetPreset {
+  id: string
+  name: string
+  displayMode: 'floating' | 'desktop'
+  motion: 'full' | 'light' | 'off'
+  widget: WidgetPreferences
+  savedAt: string
 }
 
 export interface WorkspacePreferences {
@@ -158,4 +170,6 @@ export interface WorkspaceExtras {
   preferences: WorkspacePreferences
   /** 已添加到桌面小部件的类型。 */
   widgets: WidgetKind[]
+  /** 小组件布局预设（随个人档案保存）。 */
+  widgetPresets: WidgetPreset[]
 }

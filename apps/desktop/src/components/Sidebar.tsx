@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { CalendarDays, CheckCircle2, ChevronDown, Hash, History, NotebookPen, Plus, Trash2, UserRound } from 'lucide-react'
+import { CheckCircle2, Hash, History, ListTodo, NotebookPen, Plus, Trash2 } from 'lucide-react'
 import { addDays, dateKey, type TodoItem, type TodoList } from '@focusnotes/core'
 import { listViewId, tagViewId, type ViewId } from '../navigation'
 import { listIcon } from '../taskIcons'
@@ -11,14 +11,13 @@ interface SidebarProps {
   lists: TodoList[]
   onNavigate: (view: ViewId) => void
   onAddList: (name: string) => void
-  profileName: string
-  onProfile: () => void
+
 }
 
 function countActive(todos: TodoItem[]): number {
   return todos.filter((todo) => !todo.completed && !todo.deleted).length
 }
-export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList, profileName, onProfile }: SidebarProps) {
+export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: SidebarProps) {
   const [adding, setAdding] = useState(false)
   const [name, setName] = useState('')
 
@@ -62,7 +61,7 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList, pr
   }
 
   const smart = [
-    { id: 'today' as const, label: '今天', icon: CalendarDays, count: stats.today },
+    { id: 'today' as const, label: '今天', icon: ListTodo, count: stats.today },
     { id: 'recent' as const, label: '最近 7 天', icon: History, count: stats.recent },
     { id: 'inbox' as const, label: '收集箱', icon: listIcon('inbox'), count: stats.inbox },
   ]
@@ -76,11 +75,6 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList, pr
           <small>专注 · 待办 · 习惯</small>
         </div>
       </div>
-      <button className="sidebar-profile" onClick={onProfile} title="切换记录档案" aria-label="切换记录档案">
-        <UserRound size={15} />
-        <span className="sidebar-profile-name">{profileName || '默认档案'}</span>
-        <ChevronDown size={13} />
-      </button>
 
       <div className="sidebar-scroll">
         <div className="smart-list">

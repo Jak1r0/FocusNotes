@@ -1,5 +1,93 @@
 # FocusNotes 发布说明
 
+## 0.1.4（Windows / Android）
+
+发布日期：2026-11-23
+
+| 平台 | 版本号 | 说明 |
+| --- | --- | --- |
+| Windows | 0.1.4 | 安装包目录 `apps/desktop/release-011e` |
+| Android | 0.1.4（versionCode 7） | 可从 0.1.3 覆盖安装 |
+| 核心包 `@focusnotes/core` | 0.1.4 | 小组件预设与格言、偏好 |
+
+### 主要变更
+
+#### 桌面界面与图标
+
+- 桌面端导航图标与移动端统一：任务入口使用 `ListTodo`，日历、习惯、专注、备忘录图标保持一致。
+- 深浅主题下毛玻璃背景降低透明度，提高正文与小部件文字对比度。
+- 快速添加输入框加强边框与背景区分；空状态标题与说明文字提高可读性。
+- 今日空状态移除重复的「添加任务」按钮，仅保留顶部快速添加入口。
+- 设置页长文本、格言输入、预设名称增加换行/截断保护，修复字体溢出。
+
+#### 桌面小组件
+
+- 四象限按「紧急 / 重要」矩阵展示文字标签与数量，并保留轴提示。
+- 移除普通窗口模式，仅保留浮动与固定到桌面；窗口持续隐藏于任务栏。
+- 点击穿透改为命中测试：背景穿透，按钮/输入框/习惯打卡自动恢复鼠标事件。
+- 新增可自定义格言，默认 **Every Second Counts**，显示在小组件顶部并写入个人档案 JSON。
+- 取消迷你窗口；删除侧栏档案切换入口，档案切换仅保留左上角。
+- 布局预设移入个人档案 JSON，随备份与 Gitee 同步，最多 8 个。
+
+#### 移动端
+
+- 习惯支持补卡：选择过去计划日登记，自动重算当前与历史最佳连续天数。
+- 日历新增「月 / 周 / 日」视图：周视图 7 天卡片，日视图聚焦当天安排。
+- 习惯连续天数与历史最佳同步写入 JSON。
+
+#### 数据与核心
+
+- `WidgetPreferences` 新增 `motto`；`WidgetPreset` 与 `WorkspaceExtras.widgetPresets` 纳入 JSON、备份与同步。
+- `Habit` 新增 `streak` / `bestStreak`；加载时按 `habitLogs` 重算。
+- 核心测试新增预设与连续天数用例，总计 55 项。
+
+### 修复内容
+
+- 修复点击穿透后无法点击添加任务、习惯打卡与输入框聚焦的问题。
+- 修复小组件以普通窗口出现在任务栏的问题。
+- 修复四象限只显示图标、无法辨别紧急/重要含义的问题。
+- 修复深色玻璃背景对比度不足、浅色输入框边界不清的问题。
+- 修复今日空状态与顶部快速添加重复入口。
+- 修复设置页与小组件长文本溢出。
+- 修复迷你窗口与侧栏档案重复入口。
+- 修复预设保存在 localStorage、不随个人档案同步的问题。
+
+### 兼容性
+
+- **数据格式**：`Habit` 新增 `streak` / `bestStreak`；`WidgetPreferences` 新增 `motto`；新增 `WorkspaceExtras.widgetPresets`。旧数据自动补默认值。
+- **Windows**：Windows 10/11 x64；固定模式与 acrylic 玻璃依赖系统能力。
+- **Android**：Android 7.0（API 24）及以上，`versionCode` 7，可从 0.1.3 覆盖；2.x 需卸载重装。
+- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `9c7bf90821630446cab24827c44e4fcfb97451c4a31aa241ad9814a1e86fa38e`。
+- **验签附件**：`FocusNotes-0.1.4-cert.pem` 为公钥证书，`FocusNotes-0.1.4.apk.sha256` 为 APK 校验文件；私钥 keystore 不公开。
+
+### 升级注意事项
+
+1. 升级前导出 JSON 备份。
+2. Android 0.1.3 → 0.1.4 可直接覆盖；2.x 需先卸载。
+3. 旧的 localStorage 小组件预设不会自动迁移，需要在设置中重新保存一次。
+4. 点击穿透开启后，交互元素会自动恢复鼠标事件；若行为异常，可从主窗口设置关闭。
+5. Windows 安装包未做代码签名。
+
+### 已知限制
+
+- 桌面固定模式依赖 Windows Explorer；Explorer 重启后最多 15 秒恢复。
+- 系统 acrylic 玻璃背景依赖 Windows 11 与显卡驱动，不支持时回退半透明底色。
+- Android 习惯提醒时间当前仅保存，不发送本地通知。
+- Gitee 同步为整文件提交，冲突时需要重新拉取后再提交。
+
+### 验证记录
+
+本次发布前已执行：
+
+```powershell
+npm run typecheck   # core / desktop / mobile 均通过
+npm test            # 3 个测试文件，55 项用例通过
+npm run dist -w @focusnotes/desktop  # 生成 Setup 0.1.4
+gradlew assembleRelease  # APK 0.1.4，versionCode 7
+npm run sign:apk     # 严格 zipalign + apksigner，v1/v2/v3 通过
+npm run verify:release  # APK/EXE 校验通过
+```
+
 ## 0.1.3（Windows / Android）
 
 发布日期：2026-11-23

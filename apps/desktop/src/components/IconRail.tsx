@@ -1,6 +1,6 @@
 import {
   CalendarDays,
-  CheckSquare,
+  ListTodo,
   NotebookPen,
   Flame,
   LayoutGrid,
@@ -30,7 +30,7 @@ interface IconRailProps {
 }
 
 const NAV_DEFS: Record<NavId, { id: NavId; label: string; icon: typeof CalendarDays }> = {
-  today: { id: 'today', label: '今天', icon: CheckSquare },
+  today: { id: 'today', label: '今天', icon: ListTodo },
   memos: { id: 'memos', label: '备忘录', icon: NotebookPen },
   pomodoro: { id: 'pomodoro', label: '番茄专注', icon: Timer },
   habits: { id: 'habits', label: '习惯', icon: Flame },

@@ -9,6 +9,8 @@ import type {
   TodoItem,
   TodoList,
   WidgetKind,
+  WidgetPreferences,
+  WidgetPreset,
   WidgetSnap,
   WorkspaceExtras,
   WorkspacePreferences,
@@ -44,7 +46,7 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   dailyGoal: 8,
   sound: true,
   font: 'system',
-  widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100, locked: false, clickThrough: false },
+  widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100, locked: false, clickThrough: false, motto: 'Every Second Counts' },
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
   navHidden: ['search'],
 }
@@ -85,6 +87,7 @@ export function createDefaultExtras(now = new Date()): WorkspaceExtras {
     memos: [],
     preferences: { ...DEFAULT_PREFERENCES },
     widgets: ['tasks'],
+    widgetPresets: [],
   }
 }
 
@@ -467,6 +470,7 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
       fontSize: numberIn(widgetPref.fontSize, 100, 80, 140),
       locked: widgetPref.locked === true,
       clickThrough: widgetPref.clickThrough === true,
+      motto: text(widgetPref.motto, DEFAULT_PREFERENCES.widget.motto, 80) || DEFAULT_PREFERENCES.widget.motto,
     },
     navOrder,
     navHidden,
@@ -482,7 +486,45 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
   }
   if (!widgets.length) widgets.push('tasks')
 
+  const widgetPresets: WidgetPreset[] = []
+  const presetIds = new Set<string>()
+  if (Array.isArray(record.widgetPresets)) {
+    for (const item of record.widgetPresets.slice(0, 8)) {
+      const preset = asRecord(item)
+      if (!preset) continue
+      const id = text(preset.id, '', 64)
+      const name = text(preset.name, '', 24)
+      if (!id || !name || presetIds.has(id)) continue
+      presetIds.add(id)
+      const displayMode = preset.displayMode === 'desktop' ? 'desktop' : 'floating'
+      const motion = preset.motion === 'light' || preset.motion === 'off' ? preset.motion : 'full'
+      const presetWidget = asRecord(preset.widget) ?? {}
+      const widget: WidgetPreferences = {
+        ...preferences.widget,
+        material: presetWidget.material === 'classic' || presetWidget.material === 'liquid' ? presetWidget.material : preferences.widget.material,
+        opacity: numberIn(presetWidget.opacity, preferences.widget.opacity, 20, 100),
+        glassTransparency: numberIn(presetWidget.glassTransparency, preferences.widget.glassTransparency, 0, 100),
+        glassBlur: numberIn(presetWidget.glassBlur, preferences.widget.glassBlur, 0, 32),
+        darkMode: presetWidget.darkMode === 'light' || presetWidget.darkMode === 'dark' ? presetWidget.darkMode : preferences.widget.darkMode,
+        alwaysOnTop: presetWidget.alwaysOnTop !== false,
+        snap: typeof presetWidget.snap === 'string' && validSnaps.includes(presetWidget.snap as WidgetSnap) ? presetWidget.snap as WidgetSnap : preferences.widget.snap,
+        fontSize: numberIn(presetWidget.fontSize, preferences.widget.fontSize, 80, 140),
+        locked: presetWidget.locked === true,
+        clickThrough: presetWidget.clickThrough === true,
+        motto: text(presetWidget.motto, preferences.widget.motto, 80) || preferences.widget.motto,
+      }
+      widgetPresets.push({
+        id,
+        name,
+        displayMode,
+        motion,
+        widget,
+        savedAt: typeof preset.savedAt === 'string' ? preset.savedAt : new Date().toISOString(),
+      })
+    }
+  }
+
   const memos = normalizeMemos(record.memos)
 
-  return { version: 2, lists, habits, habitLogs, focusSessions, memos, preferences, widgets }
+  return { version: 2, lists, habits, habitLogs, focusSessions, memos, preferences, widgets, widgetPresets }
 }

@@ -509,15 +509,15 @@ const FONT_FAMILIES = {
 /* ── 小部件磁吸：桌面边角 / 跟随前台应用窗口 ─────────────── */
 
 const widgetMaterials = ['classic', 'frosted', 'liquid']
-const widgetPrefs = { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false }
+const widgetPrefs = { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false, motto: 'Every Second Counts' }
 const initialWidgetSize = { width: 168, height: 216 }
 let widgetSize = initialWidgetSize
 let snapTimer = null
-let widgetDisplayMode = 'normal'
+let widgetDisplayMode = 'floating'
 let widgetModeChange = Promise.resolve()
 let widgetStatePath = ''
 let widgetState = { positions: {}, lastDisplayId: null }
-let savedWidgetDisplayMode = 'normal'
+let savedWidgetDisplayMode = 'floating'
 let desktopWatchTimer = null
 let desktopWatchBusy = false
 let widgetBoundsTimer = null
@@ -540,7 +540,9 @@ function loadWidgetState() {
   try {
     const raw = JSON.parse(fs.readFileSync(widgetStatePath, 'utf8'))
     if (raw && typeof raw === 'object') {
-      if (['floating', 'normal', 'desktop'].includes(raw.displayMode)) savedWidgetDisplayMode = raw.displayMode
+      if (raw.displayMode === 'desktop' || raw.displayMode === 'floating' || raw.displayMode === 'normal') {
+        savedWidgetDisplayMode = raw.displayMode === 'desktop' ? 'desktop' : 'floating'
+      }
       if (raw.positions && typeof raw.positions === 'object') widgetState.positions = raw.positions
       if (typeof raw.lastDisplayId === 'number' || typeof raw.lastDisplayId === 'string') widgetState.lastDisplayId = raw.lastDisplayId
     }
@@ -634,12 +636,16 @@ function startDesktopWatch() {
 }
 
 async function applyWidgetDisplayMode(mode) {
-  if (!['floating', 'normal', 'desktop'].includes(mode)) return { ok: false, error: '无效的小部件展示方式。', mode: widgetDisplayMode }
+  if (!['floating', 'desktop'].includes(mode)) return { ok: false, error: '无效的小部件展示方式。', mode: widgetDisplayMode }
   if (mode === 'desktop' && process.platform !== 'win32') return { ok: false, error: '桌面模式仅支持 Windows。', mode: widgetDisplayMode }
   if (!widgetWindow || widgetWindow.isDestroyed()) createWidgetWindow()
   const window = widgetWindow
   const previous = widgetDisplayMode
   if (mode === previous) {
+    if (!window.isDestroyed()) {
+      window.setAlwaysOnTop(mode === 'floating', 'floating')
+      window.setSkipTaskbar(true)
+    }
     savedWidgetDisplayMode = mode
     saveWidgetState()
     startDesktopWatch()
@@ -697,9 +703,12 @@ function applyWidgetAppearance(prefs) {
     if (['classic', 'frosted', 'liquid'].includes(prefs.material)) widgetPrefs.material = prefs.material
     if (typeof prefs.locked === 'boolean') widgetPrefs.locked = prefs.locked
     if (typeof prefs.clickThrough === 'boolean') widgetPrefs.clickThrough = prefs.clickThrough
+    if (typeof prefs.motto === 'string') widgetPrefs.motto = prefs.motto.slice(0, 80)
   }
   if (!widgetWindow || widgetWindow.isDestroyed()) return
   try {
+    widgetWindow.setTitle(widgetPrefs.motto || 'Every Second Counts')
+    widgetWindow.setSkipTaskbar(true)
     if (typeof widgetWindow.setBackgroundMaterial === 'function') {
       widgetWindow.setBackgroundMaterial(widgetPrefs.material === 'classic' ? 'none' : 'acrylic')
     }
@@ -708,7 +717,7 @@ function applyWidgetAppearance(prefs) {
   }
   try {
     widgetWindow.setMovable(!widgetPrefs.locked)
-    widgetWindow.setFocusable(!widgetPrefs.clickThrough)
+
     if (widgetPrefs.clickThrough) widgetWindow.setIgnoreMouseEvents(true, { forward: true })
     else widgetWindow.setIgnoreMouseEvents(false)
   } catch (error) {
@@ -789,15 +798,16 @@ function createWidgetWindow() {
   })
   if (process.env.VITE_DEV_SERVER_URL) widgetWindow.loadURL(new URL('widget.html', process.env.VITE_DEV_SERVER_URL).href)
   else widgetWindow.loadFile(path.join(__dirname, '../dist/widget.html'))
+  widgetWindow.setSkipTaskbar(true)
 
   widgetWindow.once('ready-to-show', () => {
     applyWidgetAppearance()
-    if (savedWidgetDisplayMode !== 'normal') {
-      void applyWidgetDisplayMode(savedWidgetDisplayMode)
-    } else if (widgetPrefs.snap === 'none') {
-      restoreWidgetBounds(widgetWindow)
+    if (savedWidgetDisplayMode === 'desktop') {
+      void applyWidgetDisplayMode('desktop')
     } else {
-      setTimeout(() => void applySnap(), 60)
+      void applyWidgetDisplayMode('floating')
+      if (widgetPrefs.snap === 'none') restoreWidgetBounds(widgetWindow)
+      else setTimeout(() => void applySnap(), 60)
     }
     if (widgetShouldShow) widgetWindow.showInactive()
   })
@@ -807,7 +817,7 @@ function createWidgetWindow() {
   widgetWindow.on('closed', () => {
     stopDesktopWatch()
     widgetWindow = null
-    widgetDisplayMode = 'normal'
+    widgetDisplayMode = 'floating'
   })
 }
 
@@ -883,17 +893,11 @@ function registerIpc() {
     const opacity = Math.min(1, Math.max(0.2, Number(value)))
     if (Number.isFinite(opacity)) mainWindow?.setOpacity(opacity)
   })
-  ipcMain.on('window:set-mode', (_event, mode) => {
-    if (!mainWindow) return
-    if (mode === 'mini') {
-      mainWindow.setMinimumSize(300, 400)
-      mainWindow.setSize(MINI_WINDOW.width, MINI_WINDOW.height)
-    } else {
-      const bounds = fullBounds()
-      mainWindow.setMinimumSize(920, 620)
-      mainWindow.setSize(bounds.width, bounds.height)
-      mainWindow.center()
-    }
+  ipcMain.on('widget:set-ignore-mouse', (event, payload) => {
+    if (event.sender !== widgetWindow?.webContents) return
+    if (!widgetWindow || widgetWindow.isDestroyed()) return
+    const ignore = widgetPrefs.clickThrough ? Boolean(payload?.ignore) : false
+    try { widgetWindow.setIgnoreMouseEvents(ignore, payload?.forward ? { forward: true } : undefined) } catch { /* 忽略 */ }
   })
 
   ipcMain.on('theme:set', (_event, mode) => {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { buildSyncPayload, createGiteeSync, mergeSyncPayload, type GiteeConfig } from '@focusnotes/core'
-import { CalendarPlus, ListTodo, X } from 'lucide-react'
+import { ListTodo, X } from 'lucide-react'
 import {
   dateKey,
   FONT_OPTIONS,
@@ -9,15 +9,16 @@ import {
   todayCompletion,
   type TodoDraft,
   type TodoItem,
+  type WidgetPreset,
 } from '@focusnotes/core'
 import { IconRail } from './components/IconRail'
 import { MemosView } from './components/MemosView'
 import { Sidebar } from './components/Sidebar'
-import { TopBar, MiniTopBar } from './components/TopBar'
+import { TopBar } from './components/TopBar'
 import { TaskListView } from './components/TaskListView'
 import { TaskDialog } from './components/TaskDialog'
 import { TaskRow } from './components/TaskRow'
-import { QuickAdd } from './components/QuickAdd'
+
 import { PomodoroView } from './components/PomodoroView'
 import { HabitsView } from './components/HabitsView'
 import { QuadrantView } from './components/QuadrantView'
@@ -26,7 +27,7 @@ import { AssistantView } from './components/AssistantView'
 import { WidgetView } from './components/WidgetView'
 import { applyPalette, resolvePalette } from './palettes'
 import { resolveMotion } from './motion'
-import { createWidgetPreset, loadWidgetPresets, persistWidgetPresets, type WidgetPreset } from './widget-presets'
+
 import { SearchDialog } from './components/SearchDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { GlassBackdrop } from './components/GlassBackdrop'
@@ -86,7 +87,7 @@ export default function App() {
     window.localStorage.setItem('focusnotes.sidebar', next)
   }
 
-  const [mini, setMini] = useState(() => window.localStorage.getItem('focusnotes.mode') === 'mini')
+
   const [opacity, setOpacity] = useState(() => {
     const stored = Number(window.localStorage.getItem('focusnotes.opacity') ?? 100)
     return Number.isFinite(stored) ? (stored <= 1 ? Math.round(stored * 100) : stored) : 100
@@ -105,7 +106,7 @@ export default function App() {
   const [backgroundBusy, setBackgroundBusy] = useState(false)
   const [backgroundError, setBackgroundError] = useState('')
   const [widgetEnabled, setWidgetEnabled] = useState(() => loadBool('focusnotes.widget', true))
-  const [widgetDisplayMode, setWidgetDisplayMode] = useState<WidgetDisplayMode>('normal')
+  const [widgetDisplayMode, setWidgetDisplayMode] = useState<WidgetDisplayMode>('floating')
   const [widgetModePending, setWidgetModePending] = useState(false)
   const [widgetModeError, setWidgetModeError] = useState('')
   const changeWidgetMode = useCallback(async (mode: WidgetDisplayMode) => {
@@ -138,12 +139,26 @@ export default function App() {
     document.documentElement.dataset.motion = motion
     window.localStorage.setItem('focusnotes.motion', motion)
   }, [motion])
-  const [widgetPresets, setWidgetPresets] = useState<WidgetPreset[]>(() => loadWidgetPresets())
-  useEffect(() => { persistWidgetPresets(widgetPresets) }, [widgetPresets])
+  const widgetPresets = ws.extras.widgetPresets
   const saveWidgetPreset = useCallback((name: string) => {
-    const preset = createWidgetPreset(name, widgetDisplayMode, motion, ws.extras.preferences.widget)
-    setWidgetPresets((current) => [preset, ...current.filter((item) => item.name !== preset.name)].slice(0, 8))
-  }, [widgetDisplayMode, motion, ws.extras.preferences.widget])
+    const clean = name.trim()
+    if (!clean) return
+    const id = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    const preset: WidgetPreset = {
+      id,
+      name: clean.slice(0, 24),
+      displayMode: widgetDisplayMode,
+      motion,
+      widget: { ...ws.extras.preferences.widget },
+      savedAt: new Date().toISOString(),
+    }
+    ws.updateExtras((current) => ({
+      ...current,
+      widgetPresets: [preset, ...current.widgetPresets.filter((item) => item.name !== preset.name)].slice(0, 8),
+    }))
+  }, [widgetDisplayMode, motion, ws.extras.preferences.widget, ws.updateExtras])
   const applyWidgetPreset = useCallback((id: string) => {
     const preset = widgetPresets.find((item) => item.id === id)
     if (!preset) return
@@ -155,8 +170,8 @@ export default function App() {
     void changeWidgetMode(preset.displayMode)
   }, [widgetPresets, ws.updateExtras, changeWidgetMode])
   const deleteWidgetPreset = useCallback((id: string) => {
-    setWidgetPresets((current) => current.filter((item) => item.id !== id))
-  }, [])
+    ws.updateExtras((current) => ({ ...current, widgetPresets: current.widgetPresets.filter((item) => item.id !== id) }))
+  }, [ws.updateExtras])
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
   const [remindEnabled, setRemindEnabled] = useState(() => loadBool('focusnotes.remind', true))
   const [leadMinutes, setLeadMinutes] = useState(() => Number(window.localStorage.getItem('focusnotes.remindMinutes') ?? 15))
@@ -252,7 +267,7 @@ export default function App() {
 
   useEffect(() => window.focusDesktop?.onNavigateView((view) => setView(view as ViewId)), [])
   useEffect(() => { window.focusDesktop?.setOpacity(opacity / 100); window.localStorage.setItem('focusnotes.opacity', String(opacity)) }, [opacity])
-  useEffect(() => { window.focusDesktop?.setMode(mini ? 'mini' : 'full'); window.localStorage.setItem('focusnotes.mode', mini ? 'mini' : 'full') }, [mini])
+
 
   useEffect(() => {
     window.localStorage.setItem('focusnotes.remind', String(remindEnabled))
@@ -267,14 +282,14 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem('focusnotes.theme', themeMode)
     window.focusDesktop?.setTheme(themeMode)
-    window.localStorage.setItem('focusnotes.mode', mini ? 'mini' : 'full')
+
     if (themeMode === 'light' || themeMode === 'dark') { setDark(themeMode === 'dark'); return }
     const query = window.matchMedia('(prefers-color-scheme: dark)')
     if (themeMode === 'system') setDark(query.matches)
     const onChange = (event: MediaQueryListEvent) => { if (themeMode === 'system') setDark(event.matches) }
     query.addEventListener('change', onChange)
     return () => query.removeEventListener('change', onChange)
-  }, [themeMode, mini])
+  }, [themeMode])
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? 'dark' : 'light'
@@ -703,29 +718,6 @@ export default function App() {
     onClose={() => setSettingsOpen(false)}
   />
 
-  if (mini) {
-    return <div className={`app-shell mini effect-${windowEffect}`}>
-      {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} mode={glassBackground} image={glassImage} />}
-      <MiniTopBar onExpand={() => setMini(false)} onMinimize={() => window.focusDesktop?.minimize()} onClose={() => window.focusDesktop?.close()} />
-      <main className="mini-content">
-        <div className="mini-head">
-          <span>{new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })}</span>
-          <button className="ghost-button small" onClick={() => openNew()}><CalendarPlus size={13} /> 新建</button>
-        </div>
-        <QuickAdd lists={lists} defaultListId="inbox" onAdd={ws.addTask} />
-        <div className="mini-list">
-          {open.length === 0 ? <div className="empty-state small"><ListTodo size={24} /><p>今天已经清空。</p></div> :
-            open.slice(0, 12).map((todo) => <TaskRow key={todo.id} todo={todo} lists={lists} compact onToggle={(id) => void run(ws.toggleTask(id))} onEdit={openTask} onDelete={(id) => setDeleting(todos.find((item) => item.id === id) ?? null)} />)}
-        </div>
-      </main>
-      {taskDialog}
-      {confirmDialog}
-      {profilesDialog}
-      {(ws.saveError || error) && <div className="toast" role="alert">{ws.saveError || error}{ws.saveError
-        ? <button onClick={ws.retrySave}>重试</button>
-        : <button onClick={() => setError('')} aria-label="关闭提示"><X size={14} /></button>}</div>}
-    </div>
-  }
 
   return <div className={`app-shell effect-${windowEffect}`}>
     {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} mode={glassBackground} image={glassImage} />}
@@ -741,7 +733,7 @@ export default function App() {
       navOrder={ws.extras.preferences.navOrder}
       navHidden={ws.extras.preferences.navHidden}
     />
-    <Sidebar visible={sidebarVisible} view={view} todos={todos} lists={lists} onNavigate={setView} onAddList={addList} profileName={ws.profile.name} onProfile={() => setProfilesOpen(true)} />
+    <Sidebar visible={sidebarVisible} view={view} todos={todos} lists={lists} onNavigate={setView} onAddList={addList} />
     <main className="workspace">
       <TopBar
         title={title}
@@ -750,7 +742,7 @@ export default function App() {
         onToggleSidebar={toggleSidebar}
         onSearch={() => setSearchOpen(true)}
         onSettings={() => setSettingsOpen(true)}
-        onMini={() => setMini(true)}
+
         onMinimize={() => window.focusDesktop?.minimize()}
         onClose={() => window.focusDesktop?.close()}
       />

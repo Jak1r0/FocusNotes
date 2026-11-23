@@ -207,3 +207,25 @@ describe('normalizeExtras habit streak persistence', () => {
     expect(out.habits[0]!.bestStreak).toBe(1)
   })
 })
+describe('normalizeExtras widget presets', () => {
+  it('keeps widget presets in the personal profile payload', () => {
+    const out = normalizeExtras({
+      version: 2,
+      widgetPresets: [{
+        id: 'writing', name: '写作模式', displayMode: 'desktop', motion: 'light', savedAt: '2026-11-23T00:00:00.000Z',
+        widget: { material: 'liquid', motto: 'Write every day', glassTransparency: 40 },
+      }],
+    } as never)
+    expect(out.widgetPresets).toHaveLength(1)
+    expect(out.widgetPresets[0]!.displayMode).toBe('desktop')
+    expect(out.widgetPresets[0]!.motion).toBe('light')
+    expect(out.widgetPresets[0]!.widget.material).toBe('liquid')
+    expect(out.widgetPresets[0]!.widget.motto).toBe('Write every day')
+  })
+
+  it('defaults the widget motto and preset list', () => {
+    const out = normalizeExtras({ version: 2, preferences: {} } as never)
+    expect(out.preferences.widget.motto).toBe('Every Second Counts')
+    expect(out.widgetPresets).toEqual([])
+  })
+})

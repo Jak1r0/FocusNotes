@@ -42,7 +42,7 @@ export interface ReminderPayload {
 
 export type ThemeMode = 'system' | 'light' | 'dark' | 'sun'
 export type WindowEffect = 'solid' | 'frosted' | 'liquid'
-export type WidgetDisplayMode = 'floating' | 'normal' | 'desktop'
+export type WidgetDisplayMode = 'floating' | 'desktop'
 
 export interface WidgetItem {
   id: string
@@ -54,7 +54,7 @@ export interface WidgetItem {
   overdue: boolean
 }
 
-export interface WidgetAppearance extends Pick<import('@focusnotes/core').WidgetPreferences, 'material' | 'opacity' | 'glassTransparency' | 'glassBlur' | 'snap' | 'fontSize'> {
+export interface WidgetAppearance extends Pick<import('@focusnotes/core').WidgetPreferences, 'material' | 'opacity' | 'glassTransparency' | 'glassBlur' | 'snap' | 'fontSize' | 'motto' | 'locked' | 'clickThrough'> {
   motion?: import('./motion').MotionMode
   fontFamily: string
 }
@@ -96,7 +96,7 @@ declare global {
       close(): void
       setAlwaysOnTop(value: boolean): void
       setOpacity(value: number): void
-      setMode(mode: 'full' | 'mini'): void
+      setIgnoreMouseEvents(ignore: boolean, forward?: boolean): void
       onWorkspaceChanged(callback: () => void): () => void
       onNavigateView(callback: (view: string) => void): () => void
       setTheme(mode: ThemeMode): void

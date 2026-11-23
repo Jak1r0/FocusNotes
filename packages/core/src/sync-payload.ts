@@ -74,6 +74,7 @@ export function mergeSyncPayload(local: SyncPayload, remote: SyncPayload): SyncP
     memos: mergeMemos(localExtras.memos, remoteExtras.memos),
     preferences: remoteExtras.preferences,
     widgets: [...new Set([...localExtras.widgets, ...remoteExtras.widgets])],
+    widgetPresets: mergeById(localExtras.widgetPresets, remoteExtras.widgetPresets),
   }
 
   return {

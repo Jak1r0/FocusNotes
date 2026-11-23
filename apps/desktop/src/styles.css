@@ -182,14 +182,14 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 
 .app-shell.effect-frosted {
   --glass-image-opacity: .17;
-  background: color-mix(in srgb, var(--page) 80%, transparent);
+  background: color-mix(in srgb, var(--page) 88%, transparent);
 }
 
 .app-shell.effect-liquid {
   --glass-image-opacity: .24;
   background:
     linear-gradient(140deg, color-mix(in srgb, var(--surface) 30%, transparent), transparent 65%),
-    color-mix(in srgb, var(--page) 70%, transparent);
+    color-mix(in srgb, var(--page) 78%, transparent);
   box-shadow: inset 0 0 0 1px rgb(255 255 255 / 30%), inset 0 1px 0 rgb(255 255 255 / 45%);
 }
 
@@ -521,8 +521,8 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 }
 .empty-state.card { min-height: 260px; }
 .empty-state.small { min-height: 130px; padding: 16px; }
-.empty-state h3 { margin: 12px 0 0; color: var(--text-soft); font-size: 14px; font-weight: 600; }
-.empty-state p { max-width: 280px; margin: 6px 0 0; font-size: 11.5px; line-height: 1.6; }
+.empty-state h3 { margin: 12px 0 0; color: var(--text); font-size: 14px; font-weight: 600; }
+.empty-state p { max-width: 280px; margin: 6px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.6; }
 .empty-state .ghost-button { margin-top: 14px; }
 .empty-illustration {
   position: relative;
@@ -546,9 +546,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
   gap: 8px;
   min-height: 46px;
   padding: 0 8px 0 13px;
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) 84%, var(--text));
   border-radius: 12px;
-  background: var(--surface);
+  background: color-mix(in srgb, var(--surface) 94%, var(--page));
   box-shadow: var(--shadow-sm);
   transition: border-color .18s, box-shadow .18s;
 }
@@ -1093,6 +1093,9 @@ button:disabled { cursor: not-allowed; opacity: .5; }
 .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; width: 100%; min-height: 54px; padding: 10px 0; text-align: left; border: 0; border-top: 1px solid var(--border-soft); background: transparent; }
 .settings-label + .theme-grid + * .settings-row, .settings-group > .settings-row:first-of-type { border-top: 0; }
 .settings-row > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.settings-row > span strong, .settings-row > span small { overflow-wrap: anywhere; }
+.settings-input { width: min(190px, 48%); min-width: 0; padding: 6px 8px; color: var(--text); font: inherit; font-size: 10.5px; text-overflow: ellipsis; border: 1px solid var(--border-soft); border-radius: 8px; background: transparent; }
+.settings-input:focus { border-color: var(--check-border); }
 .settings-row strong { color: var(--text); font-size: 11.5px; font-weight: 550; }
 .settings-row small { color: var(--faint); font-size: 9.5px; }
 .settings-row.clickable { cursor: pointer; }

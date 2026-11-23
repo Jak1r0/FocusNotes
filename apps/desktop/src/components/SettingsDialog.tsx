@@ -44,7 +44,7 @@ import {
 import type { ThemeMode, WidgetDisplayMode, WindowEffect } from '../desktop'
 import { PALETTES, type PaletteId } from '../palettes'
 import { MOTION_OPTIONS, resolveMotion, type MotionMode } from '../motion'
-import type { WidgetPreset } from '../widget-presets'
+import type { WidgetPreset } from '@focusnotes/core'
 import { GiteePanel } from './GiteePanel'
 
 interface SettingsDialogProps {
@@ -173,7 +173,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
   const glassControlsId = useId()
   const widget = props.preferences.widget
   const widgetSnap = props.widgetDisplayMode === 'desktop' && widget.snap === 'follow-app' ? 'top-right' : widget.snap
-  const [version, setVersion] = useState('0.1.3')
+  const [version, setVersion] = useState('0.1.4')
   const [uiScale, setUiScale] = useState(() => {
     const saved = Number(localStorage.getItem('focusnotes.uiScale') ?? 1)
     return Number.isFinite(saved) && saved >= 0.8 && saved <= 1.4 ? saved : 1
@@ -404,7 +404,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                   <select value={props.widgetDisplayMode} disabled={props.widgetModePending}
                     onChange={(event) => props.onWidgetDisplayMode(event.target.value as WidgetDisplayMode)}>
                     <option value="floating">浮动于其他 App 上方</option>
-                    <option value="normal">普通窗口</option>
+
                     <option value="desktop">固定到桌面</option>
                   </select>
                 </label>
@@ -422,6 +422,11 @@ export function SettingsDialog(props: SettingsDialogProps) {
               </div>
               <div className="settings-group">
                 <span className="settings-label"><Palette size={12} /> 小组件外观</span>
+                <label className="settings-row">
+                  <span><strong>小组件格言</strong><small>显示在小组件顶部，默认 Every Second Counts</small></span>
+                  <input className="settings-input" value={widget.motto} maxLength={60} placeholder="Every Second Counts"
+                    onChange={(event) => props.onWidgetPreferences({ motto: event.target.value })} />
+                </label>
                 <EffectPicker value={widget.material === 'classic' ? 'solid' : widget.material}
                   onChange={(effect) => props.onWidgetPreferences({ material: effect === 'solid' ? 'classic' : effect })} />
                 {widget.material !== 'classic' && <BlurControl value={widget.glassBlur} onChange={(glassBlur) => props.onWidgetPreferences({ glassBlur })} />}
@@ -475,7 +480,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                       onClick={() => props.onWidgetPreferences({ snap: option.id })}>{option.label}</button>
                   ))}
                 </div>
-                <p className="settings-hint">{props.widgetDisplayMode === 'desktop' ? '切换为普通窗口或浮动模式后可跟随应用。' : '「跟随应用」会吸附到当前前台窗口右上角，并随其移动。'}</p>
+                <p className="settings-hint">{props.widgetDisplayMode === 'desktop' ? '切换为浮动模式后可跟随应用。' : '「跟随应用」会吸附到当前前台窗口右上角，并随其移动。'}</p>
               </div>
               <div className="settings-group">
                 <span className="settings-label"><Layers size={12} /> 布局预设</span>

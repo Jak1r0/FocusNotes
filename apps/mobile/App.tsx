@@ -13,6 +13,7 @@ import {
   type GiteeConfig,
   dateKey,
   habitStreak,
+  isDateKey,
   isHabitScheduled,
   mergeSyncedTodos,
   normalizeExtras,
@@ -607,6 +608,20 @@ export default function App() {
                   ...current,
                   habits: current.habits.map((item) => item.id === habitId ? { ...item, streak, bestStreak: Math.max(item.bestStreak || 0, streak) } : item),
                   habitLogs: { ...current.habitLogs, [habitId]: logs },
+                }
+              }))}
+              onMark={(habitId, day) => run(updateExtras((current) => {
+                if (!isDateKey(day) || day > dateKey(new Date())) return current
+                const habit = current.habits.find((item) => item.id === habitId)
+                if (!habit || !isHabitScheduled(habit, new Date(`${day}T00:00:00`))) return current
+                const logs = current.habitLogs[habitId] ?? []
+                if (logs.includes(day)) return current
+                const nextLogs = [...logs, day].sort()
+                const streak = habitStreak(habit, nextLogs, new Date())
+                return {
+                  ...current,
+                  habits: current.habits.map((item) => item.id === habitId ? { ...item, streak, bestStreak: Math.max(item.bestStreak || 0, streak) } : item),
+                  habitLogs: { ...current.habitLogs, [habitId]: nextLogs },
                 }
               }))}
               onAdd={(habit) => run(updateExtras((current) => ({ ...current, habits: [...current.habits, habit], habitLogs: { ...current.habitLogs, [habit.id]: [] } })))}
