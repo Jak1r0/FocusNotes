@@ -27,7 +27,6 @@ export function HabitDialog({ habit, onClose, onSave, onDelete }: HabitDialogPro
   const [startDate, setStartDate] = useState(habit?.startDate ?? todayKey())
   const [persistence, setPersistence] = useState<HabitPersistence>(habit?.persistence ?? 'forever')
   const [group, setGroup] = useState(habit?.group ?? '其他')
-  const [reminder, setReminder] = useState(habit?.reminder ?? '')
   const [autoLog, setAutoLog] = useState(habit?.autoLog ?? false)
   const [error, setError] = useState('')
 
@@ -55,7 +54,7 @@ export function HabitDialog({ habit, onClose, onSave, onDelete }: HabitDialogPro
       startDate,
       persistence,
       group,
-      reminder: reminder || null,
+      reminder: habit?.reminder ?? null,
       autoLog,
       archived: habit?.archived ?? false,
       createdAt: habit?.createdAt ?? new Date().toISOString(),
@@ -142,18 +141,12 @@ export function HabitDialog({ habit, onClose, onSave, onDelete }: HabitDialogPro
             </label>
           </div>
 
-          <div className="field-grid">
-            <label className="field">
-              <span>所属分组</span>
-              <select value={group} onChange={(event) => setGroup(event.target.value)}>
-                {HABIT_GROUPS.map((item) => <option key={item} value={item}>{item}</option>)}
-              </select>
-            </label>
-            <label className="field">
-              <span>提醒</span>
-              <input type="time" value={reminder} onChange={(event) => setReminder(event.target.value)} />
-            </label>
-          </div>
+          <label className="field">
+            <span>所属分组</span>
+            <select value={group} onChange={(event) => setGroup(event.target.value)}>
+              {HABIT_GROUPS.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
 
           <label className="checkbox-line">
             <input type="checkbox" checked={autoLog} onChange={(event) => setAutoLog(event.target.checked)} />

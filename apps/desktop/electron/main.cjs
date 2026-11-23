@@ -165,7 +165,7 @@ function newProfileId() {
 
 /* ── 到期提醒 ────────────────────────────────────────────── */
 
-const reminder = { enabled: true, leadMinutes: 120, items: [], habits: [] }
+const reminder = { enabled: true, leadMinutes: 120, items: [] }
 let firedMap = {}
 let reminderTimer = null
 
@@ -248,37 +248,7 @@ function checkReminders() {
     dirty = true
     showReminder(item, delta)
   }
-  if (checkHabitReminders(now)) dirty = true
   if (dirty) { pruneFired(now); saveFired() }
-}
-
-// 习惯每日提醒：habit.reminder 是本地 HH:MM，按当天日期去重，每天每个习惯最多提醒一次。
-function checkHabitReminders(now) {
-  let dirty = false
-  if (!reminder.enabled || !Array.isArray(reminder.habits)) return false
-  const date = new Date(now)
-  const today = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-  const current = date.getHours() * 60 + date.getMinutes()
-  for (const habit of reminder.habits) {
-    if (!habit || !habit.id || !habit.reminder || !/^\d{2}:\d{2}$/.test(habit.reminder)) continue
-    const [hours, minutes] = habit.reminder.split(':').map(Number)
-    if (!Number.isFinite(hours) || !Number.isFinite(minutes) || hours > 23 || minutes > 59) continue
-    if (current < hours * 60 + minutes) continue
-    const key = `habit:${habit.id}@${today}`
-    if (firedMap[key]) continue
-    firedMap[key] = now
-    dirty = true
-    if (Notification.isSupported()) {
-      const notification = new Notification({
-        title: `${habit.name || '习惯'} · 该打卡了`,
-        body: `今天 ${habit.reminder} 的习惯提醒，花一点时间完成它。`,
-        silent: false,
-      })
-      notification.on('click', () => { showWindow(); mainWindow?.webContents.send('navigate:view', 'habits') })
-      notification.show()
-    }
-  }
-  return dirty
 }
 
 /* ── 深色模式：跟随系统 / 日出日落（OpenWeatherMap）───────── */
@@ -542,6 +512,45 @@ const widgetPrefs = { opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 
 const initialWidgetSize = { width: 168, height: 216 }
 let widgetSize = initialWidgetSize
 let snapTimer = null
+let widgetDisplayMode = 'normal'
+let widgetModeChange = Promise.resolve()
+
+function changeWidgetDesktopParent(window, attach) {
+  const handle = window.getNativeWindowHandle()
+  const value = handle.length === 8 ? handle.readBigUInt64LE() : BigInt(handle.readUInt32LE())
+  const script = fs.readFileSync(path.join(__dirname, 'widget-desktop.ps1'), 'utf8')
+  const command = `$widgetHandle = [long]${value}; $attachToDesktop = $${attach};\n${script}`
+  return new Promise((resolve, reject) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand',
+      Buffer.from(command, 'utf16le').toString('base64')], { timeout: 10000, windowsHide: true },
+    (error) => error ? reject(error) : resolve())
+  })
+}
+
+async function applyWidgetDisplayMode(mode) {
+  if (!['floating', 'normal', 'desktop'].includes(mode)) return { ok: false }
+  if (!widgetWindow || widgetWindow.isDestroyed()) createWidgetWindow()
+  const window = widgetWindow
+  const previous = widgetDisplayMode
+  if (mode === previous) return { ok: true }
+  try {
+    if (previous === 'desktop' || mode === 'desktop') {
+      if (process.platform !== 'win32') return { ok: false }
+      window.setAlwaysOnTop(false)
+      await changeWidgetDesktopParent(window, mode === 'desktop')
+    }
+    if (window.isDestroyed()) return { ok: false }
+    window.setAlwaysOnTop(mode === 'floating', 'floating')
+    widgetDisplayMode = mode
+    startSnapTimer()
+    void applySnap()
+    return { ok: true }
+  } catch (error) {
+    if (!window.isDestroyed() && previous !== 'desktop') window.setAlwaysOnTop(previous === 'floating', 'floating')
+    console.warn('Could not apply widget display mode', error.message)
+    return { ok: false }
+  }
+}
 
 function applyWidgetAppearance(prefs) {
   if (prefs && typeof prefs === 'object') {
@@ -576,7 +585,7 @@ function foregroundRect() {
 async function applySnap() {
   if (!widgetWindow || widgetWindow.isDestroyed() || widgetPrefs.snap === 'none') return
   const window = widgetWindow
-  const snap = widgetPrefs.snap
+  const snap = widgetPrefs.snap === 'follow-app' && widgetDisplayMode === 'desktop' ? 'top-right' : widgetPrefs.snap
   const display = screen.getDisplayNearestPoint(window.getBounds())
   const area = display.workArea
   const gap = 12
@@ -586,7 +595,7 @@ async function applySnap() {
 
   if (snap === 'follow-app') {
     foreground = await foregroundRect()
-    if (window !== widgetWindow || window.isDestroyed() || widgetPrefs.snap !== snap) return
+    if (window !== widgetWindow || window.isDestroyed() || widgetPrefs.snap !== snap || widgetDisplayMode === 'desktop') return
   }
 
   // At fractional Windows display scales, feeding getSize() back into setBounds can grow the window.
@@ -603,7 +612,7 @@ async function applySnap() {
 
 function startSnapTimer() {
   clearInterval(snapTimer)
-  snapTimer = widgetPrefs.snap === 'follow-app' ? setInterval(() => void applySnap(), 1200) : null
+  snapTimer = widgetPrefs.snap === 'follow-app' && widgetDisplayMode !== 'desktop' ? setInterval(() => void applySnap(), 1200) : null
 }
 
 function createWidgetWindow() {
@@ -634,7 +643,7 @@ function createWidgetWindow() {
     if (widgetShouldShow) widgetWindow.showInactive()
   })
   widgetWindow.on('will-resize', (_event, { width, height }) => { widgetSize = { width, height } })
-  widgetWindow.on('closed', () => { widgetWindow = null })
+  widgetWindow.on('closed', () => { widgetWindow = null; widgetDisplayMode = 'normal' })
 }
 
 let widgetShouldShow = false
@@ -718,7 +727,6 @@ function registerIpc() {
       const lead = Number(data.leadMinutes)
       if (Number.isFinite(lead)) reminder.leadMinutes = Math.min(7 * 24 * 60, Math.max(1, lead))
       reminder.items = Array.isArray(data.items) ? data.items.slice(0, 500) : []
-      reminder.habits = Array.isArray(data.habits) ? data.habits.slice(0, 200) : []
       const pending = reminder.items.filter((item) => item && !item.completed).length
       tray?.setToolTip(pending ? `FocusNotes · ${pending} 项待办` : 'FocusNotes 桌面待办')
     }
@@ -810,6 +818,11 @@ function registerIpc() {
   })
   ipcMain.on('widget:close', () => { if (widgetWindow && !widgetWindow.isDestroyed()) widgetWindow.hide() })
   ipcMain.on('widget:set-enabled', (_event, enabled) => setWidgetVisible(Boolean(enabled)))
+  ipcMain.handle('widget:set-display-mode', (event, mode) => {
+    if (event.sender !== mainWindow?.webContents) return { ok: false }
+    widgetModeChange = widgetModeChange.then(() => applyWidgetDisplayMode(mode))
+    return widgetModeChange
+  })
 
   ipcMain.handle('widget:toggle', (_event, id) => {
     const doc = activeDoc()
