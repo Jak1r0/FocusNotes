@@ -31,7 +31,7 @@ FocusNotes 是一款面向 Windows 和 Android 的任务管理与专注工具，
 
 ### Windows
 
-1. 从 [GitHub Releases](https://github.com/Jak1r0/FocusNotes/releases/latest) 下载 `FocusNotes-Setup-0.1.4.exe`。
+1. 从 [GitHub Releases](https://github.com/Jak1r0/FocusNotes/releases/latest) 下载 `FocusNotes-Setup-0.1.4-2.exe`。
 2. 运行安装包并按提示完成安装；首次启动时允许通知，以便接收待办与习惯提醒。
 3. 覆盖安装会保留本地数据。
 
