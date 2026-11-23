@@ -40,7 +40,7 @@ import {
   type WidgetSnap,
   type WorkspacePreferences,
 } from '@focusnotes/core'
-import type { ThemeMode, WindowEffect } from '../desktop'
+import type { ThemeMode, WidgetDisplayMode, WindowEffect } from '../desktop'
 import { PALETTES, type PaletteId } from '../palettes'
 import { MOTION_OPTIONS, resolveMotion, type MotionMode } from '../motion'
 import { GiteePanel } from './GiteePanel'
@@ -57,6 +57,9 @@ interface SettingsDialogProps {
   windowEffect: WindowEffect
   windowBlur: number
   widgetEnabled: boolean
+  widgetDisplayMode: WidgetDisplayMode
+  widgetModePending: boolean
+  widgetModeError: string
   remindersEnabled: boolean
   leadMinutes: number
   preferences: WorkspacePreferences
@@ -69,6 +72,7 @@ interface SettingsDialogProps {
   onWindowEffect: (effect: WindowEffect) => void
   onWindowBlur: (blur: number) => void
   onWidgetEnabled: (enabled: boolean) => void
+  onWidgetDisplayMode: (mode: WidgetDisplayMode) => void
   onReminders: (enabled: boolean, leadMinutes: number) => void
   onPreferences: (patch: Partial<WorkspacePreferences>) => void
   onWidgets: (widgets: WidgetKind[]) => void
@@ -154,6 +158,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
   const [glassControlsOpen, setGlassControlsOpen] = useState(false)
   const glassControlsId = useId()
   const widget = props.preferences.widget
+  const widgetSnap = props.widgetDisplayMode === 'desktop' && widget.snap === 'follow-app' ? 'top-right' : widget.snap
   const [version, setVersion] = useState('0.1.1')
   const [uiScale, setUiScale] = useState(() => {
     const saved = Number(localStorage.getItem('focusnotes.uiScale') ?? 1)
@@ -356,9 +361,21 @@ export function SettingsDialog(props: SettingsDialogProps) {
               <header className="settings-head"><h2>桌面小部件</h2><p>独立悬浮小窗，随手完成今天的事。</p></header>
               <div className="settings-group">
                 <label className="settings-row">
-                  <span><strong>显示桌面小部件</strong><small>桌面浮窗，可被其他应用窗口覆盖</small></span>
+                  <span><strong>显示桌面小部件</strong></span>
                   <button className={`switch${props.widgetEnabled ? ' on' : ''}`} onClick={() => props.onWidgetEnabled(!props.widgetEnabled)} aria-label="显示桌面小部件"><i /></button>
                 </label>
+              </div>
+              <div className="settings-group">
+                <label className="settings-row">
+                  <span><strong>展示方式</strong></span>
+                  <select value={props.widgetDisplayMode} disabled={props.widgetModePending}
+                    onChange={(event) => props.onWidgetDisplayMode(event.target.value as WidgetDisplayMode)}>
+                    <option value="floating">浮动于其他 App 上方</option>
+                    <option value="normal">普通窗口</option>
+                    <option value="desktop">固定到桌面</option>
+                  </select>
+                </label>
+                {props.widgetModeError && <p className="form-error" role="alert">{props.widgetModeError}</p>}
               </div>
               <div className="settings-group">
                 <span className="settings-label"><Palette size={12} /> 小组件外观</span>
@@ -410,11 +427,12 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 <div className="snap-grid">
                   {SNAP_OPTIONS.map((option) => (
                     <button key={option.id}
-                      className={`snap-chip${props.preferences.widget.snap === option.id ? ' active' : ''}`}
+                      disabled={option.id === 'follow-app' && props.widgetDisplayMode === 'desktop'}
+                      className={`snap-chip${widgetSnap === option.id ? ' active' : ''}`}
                       onClick={() => props.onWidgetPreferences({ snap: option.id })}>{option.label}</button>
                   ))}
                 </div>
-                <p className="settings-hint">「跟随应用」会吸附到当前前台窗口右上角，并随其移动。</p>
+                <p className="settings-hint">{props.widgetDisplayMode === 'desktop' ? '切换为普通窗口或浮动模式后可跟随应用。' : '「跟随应用」会吸附到当前前台窗口右上角，并随其移动。'}</p>
               </div>
               <div className="settings-group widget-settings">
                 {WIDGET_KINDS.map(({ kind }) => {

@@ -38,11 +38,11 @@ export interface ReminderPayload {
   enabled: boolean
   leadMinutes: number
   items: Array<{ id: string; title: string; dueAt: string | null; completed: boolean }>
-  habits?: Array<{ id: string; name: string; reminder: string | null }>
 }
 
 export type ThemeMode = 'system' | 'light' | 'dark' | 'sun'
 export type WindowEffect = 'solid' | 'frosted' | 'liquid'
+export type WidgetDisplayMode = 'floating' | 'normal' | 'desktop'
 
 export interface WidgetItem {
   id: string
@@ -99,6 +99,7 @@ declare global {
       testReminder(): void
       notify(payload: { title: string; body: string; silent?: boolean }): void
       setWidgetEnabled(enabled: boolean): void
+      setWidgetDisplayMode(mode: WidgetDisplayMode): Promise<{ ok: boolean }>
       exportPersonal(kind: 'lists' | 'habits' | 'history' | 'all'): Promise<{ ok: boolean; message?: string; canceled?: boolean }>
       importPersonal(): Promise<{ ok: boolean; message?: string; canceled?: boolean }>
       widget: {

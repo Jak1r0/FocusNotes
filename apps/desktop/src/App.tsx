@@ -34,7 +34,7 @@ import { useWorkspace } from './useWorkspace'
 import { usePomodoroTimer } from './usePomodoroTimer'
 import { activeListId, activeTag, listViewId } from './navigation'
 import type { ViewId } from './navigation'
-import type { ProfileResult, ThemeMode, WindowEffect } from './desktop'
+import type { ProfileResult, ThemeMode, WidgetDisplayMode, WindowEffect } from './desktop'
 
 interface EditorState {
   todo?: TodoItem
@@ -100,6 +100,27 @@ export default function App() {
     return Number.isFinite(value) ? Math.min(32, Math.max(0, Math.round(value))) : 14
   })
   const [widgetEnabled, setWidgetEnabled] = useState(() => loadBool('focusnotes.widget', true))
+  const [widgetDisplayMode, setWidgetDisplayMode] = useState<WidgetDisplayMode>('normal')
+  const [widgetModePending, setWidgetModePending] = useState(false)
+  const [widgetModeError, setWidgetModeError] = useState('')
+  const changeWidgetMode = useCallback(async (mode: WidgetDisplayMode) => {
+    setWidgetModePending(true)
+    setWidgetModeError('')
+    try {
+      const result = await window.focusDesktop?.setWidgetDisplayMode(mode)
+      if (!result?.ok) throw new Error('Widget display mode unavailable')
+      setWidgetDisplayMode(mode)
+      window.localStorage.setItem('focusnotes.widgetDisplayMode', mode)
+    } catch {
+      setWidgetModeError('无法切换小部件展示方式，请重试。')
+    } finally {
+      setWidgetModePending(false)
+    }
+  }, [])
+  useEffect(() => {
+    const mode = window.localStorage.getItem('focusnotes.widgetDisplayMode')
+    if (mode === 'floating' || mode === 'desktop') void changeWidgetMode(mode)
+  }, [changeWidgetMode])
   const [themeMode, setThemeMode] = useState<ThemeMode>(loadThemeMode)
   const [palette, setPalette] = useState(() => resolvePalette(window.localStorage.getItem('focusnotes.palette') ?? 'mist').id)
   const [motion, setMotion] = useState(() => resolveMotion(window.localStorage.getItem('focusnotes.motion')))
@@ -166,11 +187,8 @@ export default function App() {
       enabled: remindEnabled,
       leadMinutes,
       items: active.map(({ id, title, dueAt, completed }) => ({ id, title, dueAt, completed })),
-      habits: ws.extras.habits
-        .filter((habit) => !habit.archived && habit.reminder)
-        .map((habit) => ({ id: habit.id, name: habit.name, reminder: habit.reminder })),
     })
-  }, [active, remindEnabled, leadMinutes, ws.extras.habits])
+  }, [active, remindEnabled, leadMinutes])
 
   useEffect(() => {
     window.localStorage.setItem('focusnotes.theme', themeMode)
@@ -582,6 +600,10 @@ export default function App() {
     onWindowEffect={setWindowEffect}
     onWindowBlur={setWindowBlur}
     onWidgetEnabled={setWidgetEnabled}
+    widgetDisplayMode={widgetDisplayMode}
+    widgetModePending={widgetModePending}
+    widgetModeError={widgetModeError}
+    onWidgetDisplayMode={changeWidgetMode}
     onReminders={(enabled, minutes) => { setRemindEnabled(enabled); setLeadMinutes(minutes) }}
     onPreferences={(patch) => ws.updateExtras((current) => ({ ...current, preferences: { ...current.preferences, ...patch } }))}
     onWidgets={(widgets) => ws.updateExtras((current) => ({ ...current, widgets }))}

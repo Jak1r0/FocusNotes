@@ -27,6 +27,7 @@ contextBridge.exposeInMainWorld('focusDesktop', {
   testReminder: () => ipcRenderer.send('reminders:test'),
   notify: (payload) => ipcRenderer.send('app:notify', payload),
   setWidgetEnabled: (enabled) => ipcRenderer.send('widget:set-enabled', enabled),
+  setWidgetDisplayMode: (mode) => ipcRenderer.invoke('widget:set-display-mode', mode),
   exportPersonal: (kind) => ipcRenderer.invoke('personal:export', kind),
   importPersonal: () => ipcRenderer.invoke('personal:import'),
   widget: {
