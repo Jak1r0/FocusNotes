@@ -48,7 +48,7 @@
 - **数据格式**：`WidgetPreferences` 新增字段，旧数据自动迁移；0.1.2 可读取 0.1.1 备份。
 - **Windows**：Windows 10/11 x64；覆盖安装保留本地数据。
 - **Android**：Android 7.0（API 24）及以上，`versionCode` 5，可从 0.1.1 / 0.1.0 覆盖；2.x 版本仍需卸载重装。
-- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `42b895e05f1d1a69a3d07730890c76e0e8bbd4631e347d3e6f03682a1084f53f`。
+- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `355da3c0c5a870dea582aa730f9e4a074f130b2311260c2cddf1689173f36af8`。
 - **验签附件**：`FocusNotes-0.1.2-cert.pem` 为公钥证书，`FocusNotes-0.1.2.apk.sha256` 为 APK 校验文件；私钥 keystore 不公开。
 
 ### 升级注意事项
