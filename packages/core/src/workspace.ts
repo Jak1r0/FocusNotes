@@ -15,6 +15,7 @@ import type {
   WidgetSnap,
   WorkspaceExtras,
   WorkspacePreferences,
+  UiPreferences,
 } from './types'
 
 export const WIDGET_KINDS: Array<{ kind: WidgetKind; label: string; description: string }> = [
@@ -51,6 +52,7 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
   navHidden: ['search'],
   railExpanded: false,
+  ui: { themeMode: 'system', palette: 'mist', windowEffect: 'frosted', windowBlur: 14, windowOpacity: 100, alwaysOnTop: true, uiScale: 1, sidebarOpen: true, glassBackground: 'system', widgetEnabled: true, motion: 'full' },
 }
 
 export const NAV_ITEMS: Array<{ id: NavId; label: string }> = [
@@ -440,6 +442,7 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
   }
 
   const prefRecord = asRecord(record.preferences) ?? {}
+  const uiRecord = asRecord(prefRecord.ui) ?? {}
   const widgetPref = asRecord(prefRecord.widget) ?? {}
   const widgetOpacity = numberIn(widgetPref.opacity, DEFAULT_PREFERENCES.widget.opacity, 20, 100)
   const previousGlassTransparency = Math.round(55 - widgetOpacity * .27)
@@ -481,6 +484,19 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
     navOrder,
     navHidden,
     railExpanded: prefRecord.railExpanded === true,
+    ui: {
+      themeMode: ['system', 'light', 'dark', 'sun'].includes(uiRecord.themeMode as string) ? uiRecord.themeMode as UiPreferences['themeMode'] : 'system',
+      palette: text(uiRecord.palette, 'mist', 40) || 'mist',
+      windowEffect: uiRecord.windowEffect === 'solid' || uiRecord.windowEffect === 'liquid' ? uiRecord.windowEffect : 'frosted',
+      windowBlur: numberIn(uiRecord.windowBlur, 14, 0, 32),
+      windowOpacity: numberIn(uiRecord.windowOpacity, 100, 20, 100),
+      alwaysOnTop: uiRecord.alwaysOnTop !== false,
+      uiScale: numberIn(uiRecord.uiScale, 1, 0.8, 1.4),
+      sidebarOpen: uiRecord.sidebarOpen !== false,
+      glassBackground: uiRecord.glassBackground === 'image' ? 'image' : 'system',
+      widgetEnabled: uiRecord.widgetEnabled !== false,
+      motion: uiRecord.motion === 'light' || uiRecord.motion === 'off' ? uiRecord.motion : 'full',
+    },
   }
 
   const widgets: WidgetKind[] = []

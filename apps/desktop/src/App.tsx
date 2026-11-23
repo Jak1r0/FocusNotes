@@ -143,6 +143,46 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(loadThemeMode)
   const [palette, setPalette] = useState(() => resolvePalette(window.localStorage.getItem('focusnotes.palette') ?? 'mist').id)
   const [motion, setMotion] = useState(() => resolveMotion(window.localStorage.getItem('focusnotes.motion')))
+  const uiHydratedRef = useRef(false)
+
+  useEffect(() => {
+    if (!ws.ready) return
+    const ui = ws.extras.preferences.ui
+    setThemeMode(ui.themeMode)
+    setPalette(resolvePalette(ui.palette).id)
+    setWindowEffect(ui.windowEffect)
+    setWindowBlur(ui.windowBlur)
+    setOpacity(ui.windowOpacity)
+    setAlwaysOnTop(ui.alwaysOnTop)
+    setSidebarPreference(ui.sidebarOpen ? 'open' : 'closed')
+    setGlassBackground(ui.glassBackground)
+    setWidgetEnabled(ui.widgetEnabled)
+    setMotion(ui.motion)
+    uiHydratedRef.current = true
+  }, [ws.ready, ws.extras.preferences.ui])
+
+  useEffect(() => {
+    if (!ws.ready || !uiHydratedRef.current) return
+    const ui = ws.extras.preferences.ui
+    const next = {
+      ...ui,
+      themeMode,
+      palette,
+      windowEffect,
+      windowBlur,
+      windowOpacity: opacity,
+      alwaysOnTop,
+      sidebarOpen: sidebarPreference !== 'closed',
+      glassBackground,
+      widgetEnabled,
+      motion,
+    }
+    if (next.themeMode === ui.themeMode && next.palette === ui.palette && next.windowEffect === ui.windowEffect
+      && next.windowBlur === ui.windowBlur && next.windowOpacity === ui.windowOpacity && next.alwaysOnTop === ui.alwaysOnTop
+      && next.sidebarOpen === ui.sidebarOpen && next.glassBackground === ui.glassBackground
+      && next.widgetEnabled === ui.widgetEnabled && next.motion === ui.motion) return
+    ws.updateExtras((current) => ({ ...current, preferences: { ...current.preferences, ui: next } }))
+  }, [ws.ready, ws.extras.preferences.ui, themeMode, palette, windowEffect, windowBlur, opacity, alwaysOnTop, sidebarPreference, glassBackground, widgetEnabled, motion, ws.updateExtras])
 
   useEffect(() => {
     document.documentElement.dataset.motion = motion

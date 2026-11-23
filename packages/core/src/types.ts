@@ -139,6 +139,21 @@ export interface WidgetPreset {
   savedAt: string
 }
 
+/** 与窗口/界面相关、需要随个人档案同步的设置。 */
+export interface UiPreferences {
+  themeMode: 'system' | 'light' | 'dark' | 'sun'
+  palette: string
+  windowEffect: 'solid' | 'frosted' | 'liquid'
+  windowBlur: number
+  windowOpacity: number
+  alwaysOnTop: boolean
+  uiScale: number
+  sidebarOpen: boolean
+  glassBackground: 'system' | 'image'
+  widgetEnabled: boolean
+  motion: 'full' | 'light' | 'off'
+}
+
 export interface WorkspacePreferences {
   pomodoroMinutes: number
   shortBreakMinutes: number
@@ -151,6 +166,7 @@ export interface WorkspacePreferences {
   navHidden: NavId[]
   /** 左侧导航栏常展开；false 时仅图标并在悬停时显示名称。 */
   railExpanded: boolean
+  ui: UiPreferences
 }
 
 /** 备忘录：独立于待办的长文本记录。 */
