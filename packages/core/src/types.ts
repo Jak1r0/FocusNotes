@@ -149,6 +149,8 @@ export interface WorkspacePreferences {
   widget: WidgetPreferences
   navOrder: NavId[]
   navHidden: NavId[]
+  /** 左侧导航栏常展开；false 时仅图标并在悬停时显示名称。 */
+  railExpanded: boolean
 }
 
 /** 备忘录：独立于待办的长文本记录。 */

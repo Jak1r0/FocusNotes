@@ -42,7 +42,7 @@
 
 - `WidgetPreferences` 新增 `motto`；`WidgetPreset` 与 `WorkspaceExtras.widgetPresets` 纳入 JSON、备份与同步。
 - `Habit` 新增 `streak` / `bestStreak`；加载时按 `habitLogs` 重算。
-- 核心测试新增预设与连续天数用例，总计 55 项。
+- 核心测试新增预设、连续天数、配色与导航持久化用例，总计 57 项。
 
 ### 修复内容
 
@@ -60,7 +60,7 @@
 - **数据格式**：`Habit` 新增 `streak` / `bestStreak`；`WidgetPreferences` 新增 `motto`；新增 `WorkspaceExtras.widgetPresets`。旧数据自动补默认值。
 - **Windows**：Windows 10/11 x64；固定模式与 acrylic 玻璃依赖系统能力。
 - **Android**：Android 7.0（API 24）及以上，`versionCode` 7，可从 0.1.3 覆盖；2.x 需卸载重装。
-- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `207947b8d5df99f80cb462fe8547fede04c93cdac3cf4333775a2a03c16d1a01`。
+- **Android 签名**：APK 内嵌 v1 / v2 / v3 签名，证书 SHA-256 为 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`；APK SHA-256 为 `365ec9e725a7bef816790b12355c4d970d20bcf8ad83559be9dbd2c443be7e25`。
 - **验签附件**：`FocusNotes-0.1.4-cert.pem` 为公钥证书，`FocusNotes-0.1.4.apk.sha256` 为 APK 校验文件；私钥 keystore 不公开。
 
 ### 升级注意事项
@@ -84,7 +84,7 @@
 
 ```powershell
 npm run typecheck   # core / desktop / mobile 均通过
-npm test            # 3 个测试文件，55 项用例通过
+npm test            # 3 个测试文件，57 项用例通过
 npm run dist -w @focusnotes/desktop  # 生成 Setup 0.1.4
 gradlew assembleRelease  # APK 0.1.4，versionCode 7
 npm run sign:apk     # 严格 zipalign + apksigner，v1/v2/v3 通过

@@ -50,6 +50,7 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100, locked: false, clickThrough: false, motto: 'Every Second Counts', quadrantPalette: 'classic' },
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
   navHidden: ['search'],
+  railExpanded: false,
 }
 
 export const NAV_ITEMS: Array<{ id: NavId; label: string }> = [
@@ -479,6 +480,7 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
     },
     navOrder,
     navHidden,
+    railExpanded: prefRecord.railExpanded === true,
   }
 
   const widgets: WidgetKind[] = []

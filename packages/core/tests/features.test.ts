@@ -229,3 +229,16 @@ describe('normalizeExtras widget presets', () => {
     expect(out.widgetPresets).toEqual([])
   })
 })
+describe('normalizeExtras UI preferences', () => {
+  it('persists the quadrant palette and rail expansion', () => {
+    const out = normalizeExtras({ version: 2, preferences: { railExpanded: true, widget: { quadrantPalette: 'klein' } } } as never)
+    expect(out.preferences.railExpanded).toBe(true)
+    expect(out.preferences.widget.quadrantPalette).toBe('klein')
+  })
+
+  it('defaults rail expansion and quadrant palette', () => {
+    const out = normalizeExtras({ version: 2, preferences: {} } as never)
+    expect(out.preferences.railExpanded).toBe(false)
+    expect(out.preferences.widget.quadrantPalette).toBe('classic')
+  })
+})

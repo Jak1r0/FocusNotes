@@ -43,7 +43,7 @@ FocusNotes 是一款面向 Windows 和 Android 的任务管理与专注工具，
 
 升级时请使用与已安装版本相同的签名。若更换签名，Android 会拒绝覆盖安装，请先导出备份再卸载重装。
 
-发布 APK 内嵌 APK Signature Scheme v1 / v2 / v3 签名，单文件即可完成签名校验与覆盖安装；本版本不再附带 `.idsig`。签名证书与 0.1.0 相同（SHA-256 `7a85…`），`versionCode` 7 可直接覆盖 0.1.3 及更早 0.1.x。APK SHA-256 为 `207947b8…`。Release 同时提供公钥证书 `FocusNotes-0.1.4-cert.pem` 与校验文件 `FocusNotes-0.1.4.apk.sha256`；私钥 keystore 不公开、不上传。
+发布 APK 内嵌 APK Signature Scheme v1 / v2 / v3 签名，单文件即可完成签名校验与覆盖安装；本版本不再附带 `.idsig`。签名证书与 0.1.0 相同（SHA-256 `7a85…`），`versionCode` 7 可直接覆盖 0.1.3 及更早 0.1.x。APK SHA-256 为 `365ec9e7…`。Release 同时提供公钥证书 `FocusNotes-0.1.4-cert.pem` 与校验文件 `FocusNotes-0.1.4.apk.sha256`；私钥 keystore 不公开、不上传。
 
 > 注意：0.1.4 的 `versionCode` 为 7，可从 0.1.3 或更早 0.1.x 直接覆盖安装。若仍在使用 2.x 版本，请先导出 JSON 备份、卸载旧版后再安装。
 
@@ -147,7 +147,7 @@ npm test
 npm run build
 ```
 
-核心包测试位于 `packages/core/tests/`，当前包含 `core.test.ts`、`features.test.ts` 与 `memo-sync.test.ts`，共 55 项用例。
+核心包测试位于 `packages/core/tests/`，当前包含 `core.test.ts`、`features.test.ts` 与 `memo-sync.test.ts`，共 57 项用例。
 
 ## 数据与隐私
 

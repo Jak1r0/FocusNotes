@@ -137,6 +137,7 @@ export default function App() {
   const [syncNote, setSyncNote] = useState('')
   const [calendarPrompt, setCalendarPrompt] = useState(true)
   const [calendarImport, setCalendarImport] = useState(false)
+  const [calendarNote, setCalendarNote] = useState('')
   const calendarPromptRef = useRef(true)
   const calendarImportRef = useRef(false)
   calendarPromptRef.current = calendarPrompt
@@ -434,9 +435,9 @@ export default function App() {
         count += 1
       }
       await AsyncStorage.setItem('focusnotes.calendarImported', JSON.stringify([...imported])).catch(() => undefined)
-      if (count) setSyncNote(`已从系统日历导入 ${count} 项`)
+      if (count) setCalendarNote(`已从系统日历导入 ${count} 项`)
     } catch (reason) {
-      setSyncNote(reason instanceof Error ? reason.message : '读取系统日历失败')
+      setCalendarNote(reason instanceof Error ? reason.message : '读取系统日历失败')
     }
   }
 
@@ -805,6 +806,8 @@ export default function App() {
                 })
               }} trackColor={{ true: '#0071e3', false: '#d1d1d6' }} />
             </View>
+            <Pressable style={styles.giteeAction} onPress={() => void importCalendarEvents()}><Text style={styles.giteeActionText}>立即导入日历</Text></Pressable>
+            {!!calendarNote && <Text style={styles.giteeNote}>{calendarNote}</Text>}
           </View>
           <View style={styles.dataInfo}><Database size={20} color="#0071e3" /><View style={styles.dataInfoText}><Text style={styles.dataTitle}>本地数据存储</Text><Text style={styles.dataHint}>待办、习惯和专注记录保存在此设备的应用存储中。</Text></View></View>
           <Pressable style={styles.dataAction} onPress={() => run(exportData())}><Download size={17} color="#0071e3" /><View style={styles.actionText}><Text style={styles.actionTitle}>导出完整备份</Text><Text style={styles.actionHint}>保存为 JSON 文件，可用于迁移或恢复</Text></View></Pressable>

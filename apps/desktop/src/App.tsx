@@ -71,7 +71,13 @@ export default function App() {
   const [error, setError] = useState('')
   const [compactWorkspace, setCompactWorkspace] = useState(() => window.matchMedia('(max-width: 940px)').matches)
   const [sidebarPreference, setSidebarPreference] = useState(() => window.localStorage.getItem('focusnotes.sidebar'))
-  const [railExpanded, setRailExpanded] = useState(() => window.localStorage.getItem('focusnotes.railExpanded') === 'true')
+  const [railExpandedPreference, setRailExpandedPreference] = useState(() => window.localStorage.getItem('focusnotes.railExpanded') === 'true')
+  const railExpanded = ws.ready ? ws.extras.preferences.railExpanded : railExpandedPreference
+  useEffect(() => {
+    if (!ws.ready) return
+    setRailExpandedPreference(ws.extras.preferences.railExpanded)
+    window.localStorage.setItem('focusnotes.railExpanded', String(ws.extras.preferences.railExpanded))
+  }, [ws.ready, ws.extras.preferences.railExpanded])
   const taskView = view === 'today' || view === 'recent' || view === 'inbox' || view === 'completed' || view === 'trash' || view.startsWith('list:') || view.startsWith('tag:')
   const sidebarVisible = taskView && (sidebarPreference === null ? !compactWorkspace : sidebarPreference === 'open')
   useEffect(() => { window.localStorage.setItem('focusnotes.railExpanded', String(railExpanded)) }, [railExpanded])
@@ -706,7 +712,7 @@ export default function App() {
     onWidgetDisplayMode={changeWidgetMode}
     widgetPresets={widgetPresets}
     railExpanded={railExpanded}
-    onRailExpanded={setRailExpanded}
+    onRailExpanded={(expanded) => ws.updateExtras((current) => ({ ...current, preferences: { ...current.preferences, railExpanded: expanded } }))}
     onSaveWidgetPreset={saveWidgetPreset}
     onApplyWidgetPreset={applyWidgetPreset}
     onDeleteWidgetPreset={deleteWidgetPreset}
