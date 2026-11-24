@@ -3,6 +3,7 @@ const path = require('node:path')
 const fs = require('node:fs')
 const { randomUUID } = require('node:crypto')
 const { execFile } = require('node:child_process')
+const { glassWallpaper } = require('./wallpaper.cjs')
 const { initBackground, getBackground, setBackgroundMode, pickBackground, clearBackground } = require('./background.cjs')
 
 const development = !app.isPackaged
@@ -444,8 +445,7 @@ function widgetData(doc = activeDoc()) {
   })
   const extras = doc.extras && typeof doc.extras === 'object' ? doc.extras : {}
   const fontFamily = FONT_FAMILIES[extras.preferences?.font] || FONT_FAMILIES.system
-  const savedMaterial = extras.preferences?.widget?.material
-  const material = widgetMaterials.includes(savedMaterial) ? savedMaterial : 'frosted'
+  const material = extras.preferences?.widget?.material === 'classic' ? 'classic' : 'liquid'
   const now = new Date()
   const agendaCounts = Object.fromEntries(Array.from({ length: 4 }, (_, offset) => {
     const day = new Date(now)
@@ -508,16 +508,15 @@ const FONT_FAMILIES = {
 
 /* ── 小部件磁吸：桌面边角 / 跟随前台应用窗口 ─────────────── */
 
-const widgetMaterials = ['classic', 'frosted', 'liquid']
-const widgetPrefs = { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false, motto: 'Every Second Counts', quadrantPalette: 'classic' }
+const widgetPrefs = { opacity: 100, glassTransparency: 28, glassStrength: 50, snap: 'top-right', fontSize: 100, motion: 'full', locked: false, clickThrough: false, motto: 'Every Second Counts', quadrantPalette: 'white' }
 const initialWidgetSize = { width: 168, height: 216 }
 let widgetSize = initialWidgetSize
 let snapTimer = null
-let widgetDisplayMode = 'floating'
+let widgetDisplayMode = 'normal'
 let widgetModeChange = Promise.resolve()
 let widgetStatePath = ''
 let widgetState = { positions: {}, lastDisplayId: null }
-let savedWidgetDisplayMode = 'floating'
+let savedWidgetDisplayMode = 'normal'
 let desktopWatchTimer = null
 let desktopWatchBusy = false
 let widgetBoundsTimer = null
@@ -541,7 +540,7 @@ function loadWidgetState() {
     const raw = JSON.parse(fs.readFileSync(widgetStatePath, 'utf8'))
     if (raw && typeof raw === 'object') {
       if (raw.displayMode === 'desktop' || raw.displayMode === 'floating' || raw.displayMode === 'normal') {
-        savedWidgetDisplayMode = raw.displayMode === 'desktop' ? 'desktop' : 'floating'
+        savedWidgetDisplayMode = raw.displayMode
       }
       if (raw.positions && typeof raw.positions === 'object') widgetState.positions = raw.positions
       if (typeof raw.lastDisplayId === 'number' || typeof raw.lastDisplayId === 'string') widgetState.lastDisplayId = raw.lastDisplayId
@@ -636,7 +635,7 @@ function startDesktopWatch() {
 }
 
 async function applyWidgetDisplayMode(mode) {
-  if (!['floating', 'desktop'].includes(mode)) return { ok: false, error: '无效的小部件展示方式。', mode: widgetDisplayMode }
+  if (!['floating', 'normal', 'desktop'].includes(mode)) return { ok: false, error: '无效的小部件展示方式。', mode: widgetDisplayMode }
   if (mode === 'desktop' && process.platform !== 'win32') return { ok: false, error: '桌面模式仅支持 Windows。', mode: widgetDisplayMode }
   if (!widgetWindow || widgetWindow.isDestroyed()) createWidgetWindow()
   const window = widgetWindow
@@ -694,28 +693,20 @@ function applyWidgetAppearance(prefs) {
     if (typeof prefs.glassTransparency === 'number' && Number.isFinite(prefs.glassTransparency)) {
       widgetPrefs.glassTransparency = Math.min(100, Math.max(0, Math.round(prefs.glassTransparency)))
     }
-    if (typeof prefs.glassBlur === 'number' && Number.isFinite(prefs.glassBlur)) {
-      widgetPrefs.glassBlur = Math.min(32, Math.max(0, Math.round(prefs.glassBlur)))
+    if (typeof prefs.glassStrength === 'number' && Number.isFinite(prefs.glassStrength)) {
+      widgetPrefs.glassStrength = Math.min(100, Math.max(0, Math.round(prefs.glassStrength)))
     }
     if (typeof prefs.snap === 'string') widgetPrefs.snap = prefs.snap
     if (['full', 'light', 'off'].includes(prefs.motion)) widgetPrefs.motion = prefs.motion
     if (Number.isFinite(Number(prefs.fontSize))) widgetPrefs.fontSize = Math.min(140, Math.max(80, Number(prefs.fontSize)))
-    if (['classic', 'frosted', 'liquid'].includes(prefs.material)) widgetPrefs.material = prefs.material
     if (typeof prefs.locked === 'boolean') widgetPrefs.locked = prefs.locked
     if (typeof prefs.clickThrough === 'boolean') widgetPrefs.clickThrough = prefs.clickThrough
     if (typeof prefs.motto === 'string') widgetPrefs.motto = prefs.motto.slice(0, 80)
-    if (['classic', 'klein', 'morandi', 'dusk'].includes(prefs.quadrantPalette)) widgetPrefs.quadrantPalette = prefs.quadrantPalette
+    if (['white', 'classic', 'klein', 'morandi', 'dusk'].includes(prefs.quadrantPalette)) widgetPrefs.quadrantPalette = prefs.quadrantPalette
   }
   if (!widgetWindow || widgetWindow.isDestroyed()) return
-  try {
-    widgetWindow.setTitle(widgetPrefs.motto || 'Every Second Counts')
-    widgetWindow.setSkipTaskbar(true)
-    if (typeof widgetWindow.setBackgroundMaterial === 'function') {
-      widgetWindow.setBackgroundMaterial(widgetPrefs.material === 'classic' ? 'none' : 'acrylic')
-    }
-  } catch {
-    // 非 Windows 或不支持系统材质的桌面环境忽略。
-  }
+  widgetWindow.setTitle(widgetPrefs.motto || 'Every Second Counts')
+  widgetWindow.setSkipTaskbar(true)
   try {
     widgetWindow.setMovable(!widgetPrefs.locked)
 
@@ -773,6 +764,18 @@ function startSnapTimer() {
   snapTimer = widgetPrefs.snap === 'follow-app' && widgetDisplayMode !== 'desktop' ? setInterval(() => void applySnap(), 1200) : null
 }
 
+function widgetShape(width, height) {
+  const radius = 12 // Keep in sync with the renderer's .widget-window radius.
+  const rects = [{ x: 0, y: radius, width, height: height - 2 * radius }]
+  for (let y = 0; y < radius; y++) {
+    // Round outwards so the native region keeps the CSS antialiased edge.
+    const inset = Math.floor(radius - Math.sqrt(radius ** 2 - (radius - y - 0.5) ** 2))
+    const row = { x: inset, y, width: width - 2 * inset, height: 1 }
+    rects.push(row, { ...row, y: height - 1 - y })
+  }
+  return rects
+}
+
 function createWidgetWindow() {
   const bounds = preferredWidgetBounds()
   widgetSize = { width: bounds.width, height: bounds.height }
@@ -786,7 +789,8 @@ function createWidgetWindow() {
     frame: false,
     transparent: true,
     backgroundColor: '#00000000',
-    backgroundMaterial: 'acrylic',
+    // Windows draws native acrylic outside the renderer's rounded clipping region.
+    backgroundMaterial: 'none',
     resizable: true,
     skipTaskbar: true,
     show: false,
@@ -797,6 +801,22 @@ function createWidgetWindow() {
       sandbox: true,
     },
   })
+  if (process.platform === 'win32') {
+    const window = widgetWindow
+    let lastShape = ''
+    const updateShape = () => {
+      const bounds = window.getBounds()
+      const { width, height } = bounds
+      const { scaleFactor } = screen.getDisplayMatching(bounds)
+      const shape = `${width}:${height}:${scaleFactor}`
+      if (lastShape === shape) return
+      lastShape = shape
+      window.setShape(widgetShape(width, height))
+    }
+    updateShape()
+    window.on('resize', updateShape)
+    window.on('move', updateShape)
+  }
   if (process.env.VITE_DEV_SERVER_URL) widgetWindow.loadURL(new URL('widget.html', process.env.VITE_DEV_SERVER_URL).href)
   else widgetWindow.loadFile(path.join(__dirname, '../dist/widget.html'))
   widgetWindow.setSkipTaskbar(true)
@@ -806,7 +826,7 @@ function createWidgetWindow() {
     if (savedWidgetDisplayMode === 'desktop') {
       void applyWidgetDisplayMode('desktop')
     } else {
-      void applyWidgetDisplayMode('floating')
+      void applyWidgetDisplayMode(savedWidgetDisplayMode)
       if (widgetPrefs.snap === 'none') restoreWidgetBounds(widgetWindow)
       else setTimeout(() => void applySnap(), 60)
     }
@@ -818,7 +838,7 @@ function createWidgetWindow() {
   widgetWindow.on('closed', () => {
     stopDesktopWatch()
     widgetWindow = null
-    widgetDisplayMode = 'floating'
+    widgetDisplayMode = 'normal'
   })
 }
 
@@ -860,8 +880,12 @@ function createTray() {
 }
 
 function registerIpc() {
+  ipcMain.handle('window:glass-wallpaper', (event) => {
+    if (event.sender !== mainWindow?.webContents) return null
+    return glassWallpaper()
+  })
   ipcMain.handle('background:get', (event) => {
-    if (event.sender !== mainWindow?.webContents && event.sender !== widgetWindow?.webContents) return { image: null }
+    if (event.sender !== mainWindow?.webContents) return { image: null, mode: 'system' }
     return getBackground()
   })
   ipcMain.handle('background:pick', async (event) => {

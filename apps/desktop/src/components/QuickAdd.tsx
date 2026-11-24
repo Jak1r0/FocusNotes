@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { CornerDownLeft, Plus, Sparkles } from 'lucide-react'
 import { HybridSmartParser, type ParsedTodoDraft, type TodoDraft, type TodoList } from '@focusnotes/core'
+import { updateGlassPointer } from '../glassInteraction'
 
 interface QuickAddProps {
   lists: TodoList[]
@@ -78,7 +79,7 @@ export function QuickAdd({ lists, defaultListId, defaultDueAt, placeholder = 'æ·
   const due = preview?.dueAt ?? defaultDueAt
   return (
     <div className="quick-add">
-      <div className="quick-add-field">
+      <div className="quick-add-field" onPointerMove={updateGlassPointer}>
         <Plus size={18} className="quick-add-plus" />
         <input
           ref={inputRef}

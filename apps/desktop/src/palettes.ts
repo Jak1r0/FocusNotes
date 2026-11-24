@@ -1,6 +1,7 @@
 const COLOR_ROLES = ['page', 'rail', 'surface', 'text', 'muted', 'accent', 'on-accent', 'danger'] as const
 
 export const PALETTES = [
+  { id: 'tide', label: '潮汐', light: ['#ECF4F5', '#DEEDEF', '#FAFDFD', '#182B30', '#4D6268', '#126A73', '#FFFFFF', '#A23749'], dark: ['#101C20', '#101A1E', '#1B2C32', '#E9F6F7', '#A9C0C6', '#8ADCE1', '#12282C', '#FFA7AD'] },
   { id: 'classic', label: '经典蓝', light: ['#F4F5F7', '#E5E8ED', '#FFFFFF', '#171A20', '#6B7280', '#2F6FED', '#FFFFFF', '#DC2626'], dark: ['#15171B', '#101216', '#1E2127', '#F1F4F9', '#9098A5', '#5B9DFF', '#08111F', '#F87171'] },
   { id: 'mist', label: '雾蓝', light: ['#F4F7FB', '#E9EFF6', '#FFFFFF', '#172437', '#526174', '#275DBC', '#FFFFFF', '#A82A40'], dark: ['#121A27', '#182232', '#1C293A', '#EAF1FA', '#AEC0D4', '#8BB8FF', '#12233F', '#FFA6AD'] },
   { id: 'pine', label: '松绿', light: ['#F5F6F0', '#E9EDE3', '#FFFEFA', '#213129', '#4C6154', '#246954', '#FFFFFF', '#9B3434'], dark: ['#151E19', '#1C2821', '#243229', '#EDF5EC', '#B3C5B8', '#84C6A7', '#14291F', '#F2A5A0'] },

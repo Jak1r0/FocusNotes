@@ -4,6 +4,7 @@ contextBridge.exposeInMainWorld('focusDesktop', {
   minimize: () => ipcRenderer.send('window:minimize'),
   close: () => ipcRenderer.send('window:close'),
   setBackgroundMaterial: (material) => ipcRenderer.send('window:set-background-material', material),
+  glassWallpaper: () => ipcRenderer.invoke('window:glass-wallpaper'),
   background: {
     get: () => ipcRenderer.invoke('background:get'),
     pick: () => ipcRenderer.invoke('background:pick'),

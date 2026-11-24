@@ -1,0 +1,330 @@
+.liquid-glass-definitions { position: absolute; pointer-events: none; }
+
+.app-shell.effect-liquid {
+  --liquid-surface: color-mix(in srgb, var(--surface) calc(83% - 36% * var(--liquid-strength, .5)), transparent);
+  --liquid-highlight: color-mix(in srgb, var(--accent) 32%, white);
+  --liquid-diffusion: calc(11px - 8px * var(--liquid-strength, .5));
+  --liquid-filter: blur(var(--liquid-diffusion)) saturate(1.15);
+  --liquid-navigation-base: var(--sidebar);
+  --liquid-navigation-edge: color-mix(in srgb, var(--liquid-highlight) 28%, transparent);
+  --liquid-navigation-selection: color-mix(in srgb, var(--accent) calc(7% + 10% * var(--liquid-strength, .5)), transparent);
+  --liquid-panel: color-mix(in srgb, var(--surface) calc(85% - 22% * var(--liquid-strength, .5)), transparent);
+  --liquid-dialog: color-mix(in srgb, var(--surface) calc(93% - 16% * var(--liquid-strength, .5)), transparent);
+  --liquid-panel-border: color-mix(in srgb, var(--text) 14%, transparent);
+  --glass-interaction-ease: cubic-bezier(.22,.8,.25,1);
+  --glass-interaction-light: color-mix(in srgb, var(--liquid-highlight) 38%, white);
+  --glass-focus: color-mix(in srgb, var(--accent) 66%, var(--text));
+  --liquid-panel-rim: inset 0 1px 0 color-mix(in srgb, var(--liquid-highlight) 60%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--liquid-highlight) 23%, transparent);
+  --liquid-panel-glint: linear-gradient(150deg,
+    color-mix(in srgb, var(--liquid-highlight) calc(9% + 22% * var(--liquid-strength, .5)), transparent),
+    transparent 58%);
+}
+
+@supports (backdrop-filter: url("#focusnotes-liquid-lens")) {
+  .app-shell.effect-liquid:has(.liquid-glass-definitions) {
+    --liquid-diffusion: calc(5px - 4px * var(--liquid-strength, .5));
+    --liquid-filter: blur(var(--liquid-diffusion)) saturate(1.18) url("#focusnotes-liquid-lens");
+  }
+}
+
+:root[data-theme='dark'] .app-shell.effect-liquid {
+  --liquid-surface: color-mix(in srgb, var(--surface) calc(87% - 30% * var(--liquid-strength, .5)), transparent);
+  --liquid-panel: color-mix(in srgb, var(--surface) calc(89% - 20% * var(--liquid-strength, .5)), transparent);
+  --liquid-highlight: color-mix(in srgb, var(--accent) 58%, #647184);
+}
+:root[data-palette='tide'] .app-shell.effect-liquid {
+  --liquid-highlight: light-dark(#B3E6EB, #95DEE3);
+  --liquid-panel: color-mix(in srgb, var(--surface), transparent calc(17% + 15% * var(--liquid-strength, .5)));
+}
+
+.app-shell.effect-liquid.has-window-artwork .topbar {
+  background: color-mix(in srgb, var(--page) 24%, transparent);
+}
+
+.app-shell.effect-liquid :is(.topbar-actions, .mini-actions, .quick-add-field) {
+  --liquid-edge: color-mix(in srgb, var(--liquid-highlight) calc(52% + 48% * var(--liquid-strength, .5)), transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  background:
+    radial-gradient(ellipse at var(--artwork-glint-origin, 18% 0%),
+      color-mix(in srgb, var(--liquid-highlight) calc(8% + 40% * var(--liquid-strength, .5)), transparent), transparent 68%),
+    var(--liquid-surface);
+  backdrop-filter: var(--liquid-filter);
+  box-shadow:
+    inset 0 1px 0 var(--liquid-edge),
+    inset 0 -1px 0 color-mix(in srgb, var(--liquid-highlight) calc(12% + 40% * var(--liquid-strength, .5)), transparent),
+    var(--shadow-sm);
+}
+
+.app-shell.effect-liquid :is(.topbar-actions, .mini-actions) {
+  border-radius: 999px;
+  padding: 2px 4px;
+}
+
+.app-shell.effect-liquid .topbar:has(.topbar-actions .icon-button:is(:hover, :focus-visible)) {
+  position: relative;
+  z-index: 2;
+}
+
+.app-shell.effect-liquid :is(.topbar-actions .icon-button, .quick-add-field, .glass-nav-control) {
+  position: relative;
+  isolation: isolate;
+  --glass-spot: 50% 25%;
+}
+
+.app-shell.effect-liquid :is(.topbar-actions .icon-button, .quick-add-field, .glass-nav-control):hover {
+  --glass-spot: var(--glass-pointer-x, 50%) var(--glass-pointer-y, 25%);
+}
+
+.app-shell.effect-liquid :is(.topbar-actions .icon-button, .quick-add-field, .glass-nav-control)::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 150ms var(--glass-interaction-ease), transform 180ms var(--glass-interaction-ease);
+}
+
+.app-shell.effect-liquid .topbar-actions .icon-button {
+  border-radius: 999px;
+  background: transparent;
+}
+
+.app-shell.effect-liquid .topbar-actions .icon-button::before {
+  background: radial-gradient(ellipse at var(--glass-spot),
+    color-mix(in srgb, var(--glass-interaction-light) 39%, transparent), transparent 78%),
+    color-mix(in srgb, var(--surface) 22%, transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--glass-interaction-light) 66%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--text) 13%, transparent), 0 2px 5px rgb(0 0 0 / 11%);
+  transform: scale(.92);
+}
+
+.app-shell.effect-liquid .topbar-actions .icon-button:is(:hover, :focus-visible)::before {
+  opacity: calc(.7 + var(--liquid-strength, .5) * .3);
+  transform: scale(1);
+}
+
+.app-shell.effect-liquid .topbar-actions .icon-button:active { transform: none; }
+.app-shell.effect-liquid .topbar-actions .icon-button:active::before {
+  opacity: 1;
+  transform: scale(.93);
+  transition-duration: 70ms;
+}
+
+.app-shell.effect-liquid .topbar-actions .icon-button:focus-visible {
+  outline: 2px solid var(--glass-focus);
+  outline-offset: 1px;
+}
+
+.app-shell.effect-liquid .topbar-actions [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  padding: 5px 9px;
+  border: 1px solid var(--liquid-panel-border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--liquid-panel-glint), color-mix(in srgb, var(--surface) 95%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow: var(--liquid-panel-rim), var(--shadow-sm);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-3px) scale(.97);
+  transform-origin: top right;
+  transition: opacity 150ms var(--glass-interaction-ease), transform 150ms var(--glass-interaction-ease),
+    visibility 0s linear 150ms;
+}
+
+.app-shell.effect-liquid .topbar-actions [data-tooltip]:is(:hover, :focus-visible):not(:active)::after {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 240ms;
+}
+
+.app-shell.effect-liquid .topbar-actions [data-tooltip]:focus-visible::after { transition-delay: 0s; }
+
+.app-shell.effect-liquid .quick-add-field { border-radius: 15px; }
+.app-shell.effect-liquid .quick-add-field::before {
+  background: radial-gradient(ellipse 26% 95% at var(--glass-spot),
+    color-mix(in srgb, var(--glass-interaction-light) 44%, transparent), transparent);
+}
+.app-shell.effect-liquid .quick-add-field:hover::before { opacity: .55; }
+.app-shell.effect-liquid .quick-add-field:focus-within::before { opacity: .88; }
+.app-shell.effect-liquid .quick-add-field:active::before { opacity: 1; }
+
+.app-shell.effect-liquid .quick-add-field:focus-within {
+  border-color: var(--glass-focus);
+  box-shadow: inset 0 1px 0 var(--liquid-edge), inset 0 -1px 0 color-mix(in srgb, var(--glass-focus) 16%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--glass-focus) 21%, transparent), var(--shadow-sm);
+}
+
+.app-shell.effect-liquid .quick-submit:enabled:hover {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--glass-interaction-light) 24%, var(--accent-soft));
+  box-shadow: inset 0 1px 0 var(--liquid-edge);
+}
+
+:root[data-motion='off'] .app-shell.effect-liquid :is(.topbar-actions .icon-button, .quick-add-field, .glass-nav-control) {
+  --glass-spot: 50% 25%;
+}
+:root[data-motion='off'] .app-shell.effect-liquid :is(.topbar-actions .icon-button, .glass-nav-control)::before { transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  :root .app-shell.effect-liquid :is(.topbar-actions .icon-button, .quick-add-field, .glass-nav-control) { --glass-spot: 50% 25%; }
+  :root .app-shell.effect-liquid :is(.topbar-actions .icon-button, .glass-nav-control)::before,
+  .app-shell.effect-liquid .topbar-actions [data-tooltip]::after { transform: none; }
+}
+
+@media (forced-colors: active) {
+  .app-shell.effect-liquid .quick-add-field:focus-within { outline: 2px solid Highlight; }
+  .app-shell.effect-liquid :is(.topbar-actions .icon-button, .quick-add-field, .glass-nav-control)::before { display: none; }
+}
+
+.app-shell.effect-liquid .icon-rail { --liquid-navigation-base: var(--rail); }
+
+.app-shell.effect-liquid :is(.icon-rail, .sidebar) {
+  border-right-color: color-mix(in srgb, var(--text) 10%, transparent);
+  background:
+    linear-gradient(150deg,
+      color-mix(in srgb, var(--liquid-highlight) calc(7% + 9% * var(--liquid-strength, .5)), transparent),
+      transparent 58%),
+    color-mix(in srgb, var(--liquid-navigation-base) calc(92% - 12% * var(--liquid-strength, .5)), transparent);
+  backdrop-filter: blur(12px);
+  box-shadow: inset -1px 0 0 var(--liquid-navigation-edge);
+}
+
+.app-shell.effect-liquid .glass-nav-control.active {
+  background: linear-gradient(155deg, color-mix(in srgb, var(--glass-interaction-light) 21%, transparent), transparent 74%),
+    color-mix(in srgb, var(--liquid-navigation-selection) 76%, transparent);
+  box-shadow: inset 0 1px 0 var(--liquid-navigation-edge), inset 0 -1px 0 color-mix(in srgb, var(--text) 9%, transparent);
+}
+
+.app-shell.effect-liquid :is(.rail-button, .side-row, .tag-chip, .side-heading .icon-ghost):not(.active):hover {
+  background: transparent;
+}
+
+.app-shell.effect-liquid .glass-nav-control::before {
+  background: radial-gradient(ellipse var(--glass-nav-spot-width, 90%) 100% at var(--glass-spot),
+    color-mix(in srgb, var(--glass-interaction-light) 41%, transparent), transparent);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--glass-interaction-light) 53%, transparent),
+    inset 0 -1px 0 color-mix(in srgb, var(--text) 10%, transparent), 0 2px 5px rgb(0 0 0 / 7%);
+  transform: scale(.97);
+}
+
+.app-shell.effect-liquid .glass-nav-control.side-row { --glass-nav-spot-width: 52%; }
+.app-shell.effect-liquid .glass-nav-control:is(:hover, :focus-visible)::before {
+  opacity: calc(.58 + var(--liquid-strength, .5) * .28);
+  transform: none;
+}
+.app-shell.effect-liquid .glass-nav-control:active::before {
+  opacity: .98;
+  transform: scale(.95);
+  transition-duration: 70ms;
+}
+.app-shell.effect-liquid .glass-nav-control:focus-visible {
+  outline: 2px solid var(--glass-focus);
+  outline-offset: -2px;
+}
+.app-shell.effect-liquid :is(.rail-button, .list-row) > svg {
+  transform: none;
+}
+
+.app-shell.effect-liquid .sidebar-profile {
+  background: color-mix(in srgb, var(--surface) 38%, transparent);
+  box-shadow: inset 0 1px 0 var(--liquid-navigation-edge);
+}
+.app-shell.effect-liquid .sidebar-profile:hover { background: var(--liquid-navigation-selection); }
+
+.app-shell.effect-liquid :is(.rail-avatar, .sidebar .brand-mark, .settings-nav .brand-mark, .mini-brand .brand-mark) {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 13%, var(--liquid-navigation-base));
+  box-shadow: inset 0 1px 0 var(--liquid-navigation-edge);
+}
+
+.app-shell.effect-liquid .icon-rail [data-tooltip]::after {
+  border-color: var(--liquid-panel-border);
+  border-radius: 999px;
+  background: var(--liquid-panel-glint), color-mix(in srgb, var(--surface) 95%, transparent);
+  box-shadow: var(--liquid-panel-rim), var(--shadow-sm);
+  backdrop-filter: blur(10px);
+}
+
+@media (forced-colors: active) {
+  .app-shell.effect-liquid .glass-nav-control.active { outline: 1px solid Highlight; outline-offset: -1px; }
+  .app-shell.effect-liquid .glass-nav-control:focus-visible { outline: 2px solid Highlight; }
+}
+
+.app-shell.effect-liquid :where(.card, .task-section > .empty-state, .task-list, .mini-list, .habit-card, .quadrant-panel, .widget-card, .stat-card,
+  .countdown-card, .memos-list, .memos-editor) {
+  border: 1px solid var(--liquid-panel-border);
+  border-radius: 16px;
+  background: var(--liquid-panel-glint), var(--liquid-panel);
+  box-shadow: var(--liquid-panel-rim), var(--shadow-sm);
+}
+
+.app-shell.effect-liquid :where(.card, .task-section > .empty-state, .task-list, .mini-list, .quadrant-panel, .memos-list, .memos-editor) {
+  backdrop-filter: blur(10px) saturate(1.12);
+}
+
+.app-shell.effect-liquid :is(.task-list, .mini-list) { padding: 3px; }
+.app-shell.effect-liquid :is(.task-list, .mini-list) .task-row { border-radius: var(--radius); }
+.app-shell.effect-liquid :is(.task-list, .mini-list) .task-row:last-child { border-bottom-color: transparent; }
+.app-shell.effect-liquid .habit-card.done { border-color: color-mix(in srgb, var(--success) 45%, var(--liquid-panel-border)); }
+.app-shell.effect-liquid .quadrant-panel.drag-over {
+  border-color: var(--accent);
+  background: var(--liquid-panel-glint), color-mix(in srgb, var(--accent) 14%, var(--liquid-panel));
+}
+
+.app-shell.effect-liquid .modal-backdrop { background: color-mix(in srgb, var(--backdrop) 76%, transparent); }
+.app-shell.effect-liquid :is(.settings-dialog, .modal, .search-dialog, .confirm-dialog, .profile-dialog) {
+  border-color: var(--liquid-panel-border);
+  border-radius: 20px;
+  background: var(--liquid-panel-glint), var(--liquid-dialog);
+  backdrop-filter: blur(16px) saturate(1.12);
+  box-shadow: var(--liquid-panel-rim), var(--shadow-lg);
+}
+
+.app-shell.effect-liquid :is(.settings-nav, .modal-foot) {
+  background: color-mix(in srgb, var(--liquid-highlight) 10%, transparent);
+}
+.app-shell.effect-liquid .settings-group {
+  border-color: var(--liquid-panel-border);
+  background: color-mix(in srgb, var(--surface) 47%, transparent);
+  box-shadow: inset 0 1px 0 var(--liquid-navigation-edge);
+}
+.app-shell.effect-liquid :is(.settings-nav > button.active, .memos-item.active) {
+  background: var(--liquid-navigation-selection);
+  box-shadow: inset 0 1px 0 var(--liquid-navigation-edge);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .app-shell.effect-liquid :is(.topbar-actions, .mini-actions, .quick-add-field) {
+    background: var(--surface);
+    backdrop-filter: none;
+  }
+  .app-shell.effect-liquid .topbar-actions [data-tooltip]::after {
+    background: var(--surface);
+    backdrop-filter: none;
+  }
+  .app-shell.effect-liquid :is(.icon-rail, .sidebar) {
+    background: var(--liquid-navigation-base);
+    backdrop-filter: none;
+  }
+  .app-shell.effect-liquid .icon-rail [data-tooltip]::after {
+    background: var(--surface);
+    backdrop-filter: none;
+  }
+  .app-shell.effect-liquid :is(.card, .task-section > .empty-state, .task-list, .mini-list, .habit-card, .quadrant-panel, .widget-card, .stat-card,
+    .countdown-card, .memos-list, .memos-editor, .settings-dialog, .modal, .search-dialog, .confirm-dialog, .profile-dialog) {
+    background: var(--surface);
+    backdrop-filter: none;
+  }
+}

@@ -1,10 +1,12 @@
 import { Minus, PanelLeftClose, PanelLeftOpen, Search, Settings2, X } from 'lucide-react'
+import { updateGlassPointer } from '../glassInteraction'
 
 interface TopBarProps {
   title: string
   subtitle: string
   sidebarVisible: boolean
   sidebarAvailable: boolean
+  liquid: boolean
   onToggleSidebar: () => void
   onSearch: () => void
   onSettings: () => void
@@ -12,9 +14,12 @@ interface TopBarProps {
   onClose: () => void
 }
 
-export function TopBar({ title, subtitle, sidebarVisible, sidebarAvailable, onToggleSidebar, onSearch, onSettings, onMinimize, onClose }: TopBarProps) {
+export function TopBar({ title, subtitle, sidebarVisible, sidebarAvailable, liquid, onToggleSidebar, onSearch, onSettings, onMinimize, onClose }: TopBarProps) {
   const SidebarIcon = sidebarVisible ? PanelLeftClose : PanelLeftOpen
   const sidebarLabel = sidebarVisible ? '收起清单栏' : '展开清单栏'
+  const hint = (label: string) => liquid
+    ? { 'data-tooltip': label, onPointerMove: updateGlassPointer }
+    : { title: label }
   return (
     <header className="topbar">
       <div className="topbar-leading">
@@ -28,17 +33,17 @@ export function TopBar({ title, subtitle, sidebarVisible, sidebarAvailable, onTo
         </div>
       </div>
       <div className="topbar-actions">
-        <button className="icon-button" onClick={onSearch} title="搜索（Ctrl+K）" aria-label="搜索">
+        <button className="icon-button" onClick={onSearch} {...hint('搜索（Ctrl+K）')} aria-label="搜索" aria-keyshortcuts="Control+K">
           <Search size={17} />
         </button>
-        <button className="icon-button" onClick={onSettings} title="设置" aria-label="设置">
+        <button className="icon-button" onClick={onSettings} {...hint('设置')} aria-label="设置">
           <Settings2 size={17} />
         </button>
         <span className="topbar-divider" />
-        <button className="icon-button" onClick={onMinimize} title="最小化到托盘" aria-label="最小化到托盘">
+        <button className="icon-button" onClick={onMinimize} {...hint('最小化到托盘')} aria-label="最小化到托盘">
           <Minus size={17} />
         </button>
-        <button className="icon-button danger-hover" onClick={onClose} title="关闭" aria-label="关闭">
+        <button className="icon-button danger-hover" onClick={onClose} {...hint('关闭')} aria-label="关闭">
           <X size={17} />
         </button>
       </div>

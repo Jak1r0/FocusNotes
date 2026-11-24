@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import { buildSyncPayload, createGiteeSync, mergeSyncPayload, type GiteeConfig } from '@focusnotes/core'
 import { ListTodo, X } from 'lucide-react'
 import {
@@ -9,6 +9,7 @@ import {
   todayCompletion,
   type TodoDraft,
   type TodoItem,
+  type UiPreferences,
   type WidgetPreset,
 } from '@focusnotes/core'
 import { IconRail } from './components/IconRail'
@@ -31,10 +32,12 @@ import { resolveMotion } from './motion'
 import { SearchDialog } from './components/SearchDialog'
 import { SettingsDialog } from './components/SettingsDialog'
 import { GlassBackdrop } from './components/GlassBackdrop'
+import { LiquidGlassLens } from './components/LiquidGlassLens'
+import { resolveWindowBackground, type WindowBackgroundId } from './windowBackgrounds'
 import { ProfileDialog, type ActionResult } from './components/ProfileDialog'
 import { useWorkspace } from './useWorkspace'
 import { usePomodoroTimer } from './usePomodoroTimer'
-import { activeListId, activeTag, listViewId } from './navigation'
+import { activeListId, activeTag, isTaskView, listViewId } from './navigation'
 import type { ViewId } from './navigation'
 import type { ProfileResult, ThemeMode, WidgetDisplayMode, WindowEffect } from './desktop'
 
@@ -78,7 +81,7 @@ export default function App() {
     setRailExpandedPreference(ws.extras.preferences.railExpanded)
     window.localStorage.setItem('focusnotes.railExpanded', String(ws.extras.preferences.railExpanded))
   }, [ws.ready, ws.extras.preferences.railExpanded])
-  const taskView = view === 'today' || view === 'recent' || view === 'inbox' || view === 'completed' || view === 'trash' || view.startsWith('list:') || view.startsWith('tag:')
+  const taskView = isTaskView(view)
   const sidebarVisible = taskView && (sidebarPreference === null ? !compactWorkspace : sidebarPreference === 'open')
   useEffect(() => { window.localStorage.setItem('focusnotes.railExpanded', String(railExpanded)) }, [railExpanded])
 
@@ -104,18 +107,33 @@ export default function App() {
   const [alwaysOnTop, setAlwaysOnTop] = useState(() => loadBool('focusnotes.pin', true))
   const [windowEffect, setWindowEffect] = useState<WindowEffect>(() => {
     const saved = window.localStorage.getItem('focusnotes.effect')
-    return saved === 'frosted' || saved === 'liquid' ? saved : 'solid'
+    return saved === 'frosted' || saved === 'liquid' ? 'liquid' : 'solid'
   })
+  const [liquidStrength, setLiquidStrength] = useState(() => {
+    const value = Number(window.localStorage.getItem('focusnotes.liquidStrength') ?? 50)
+    return Number.isFinite(value) ? Math.min(100, Math.max(0, Math.round(value))) : 50
+  })
+  const [windowBackgroundId, setWindowBackgroundId] = useState<WindowBackgroundId>(
+    () => resolveWindowBackground(window.localStorage.getItem('focusnotes.windowBackground')).id,
+  )
+  const windowBackground = resolveWindowBackground(windowBackgroundId)
+  const usingArtwork = Boolean(windowBackground.image)
   const [windowBlur, setWindowBlur] = useState(() => {
     const value = Number(localStorage.getItem('focusnotes.blur') ?? 14)
     return Number.isFinite(value) ? Math.min(32, Math.max(0, Math.round(value))) : 14
   })
+  const [artworkBlur, setArtworkBlur] = useState(() => {
+    const saved = localStorage.getItem('focusnotes.liquidArtworkBlur') ?? localStorage.getItem('focusnotes.artworkBlur')
+    const value = Number(saved ?? 1)
+    return Number.isFinite(value) ? Math.min(32, Math.max(0, Math.round(value))) : 1
+  })
+  const backgroundBlur = usingArtwork ? artworkBlur : windowBlur
   const [glassBackground, setGlassBackground] = useState<'system' | 'image'>(() => window.localStorage.getItem('focusnotes.glassBackground') === 'image' ? 'image' : 'system')
   const [glassImage, setGlassImage] = useState<string | null>(null)
   const [backgroundBusy, setBackgroundBusy] = useState(false)
   const [backgroundError, setBackgroundError] = useState('')
   const [widgetEnabled, setWidgetEnabled] = useState(() => loadBool('focusnotes.widget', true))
-  const [widgetDisplayMode, setWidgetDisplayMode] = useState<WidgetDisplayMode>('floating')
+  const [widgetDisplayMode, setWidgetDisplayMode] = useState<WidgetDisplayMode>('normal')
   const [widgetModePending, setWidgetModePending] = useState(false)
   const [widgetModeError, setWidgetModeError] = useState('')
   const changeWidgetMode = useCallback(async (mode: WidgetDisplayMode) => {
@@ -137,13 +155,13 @@ export default function App() {
   }, [])
   useEffect(() => {
     const mode = window.localStorage.getItem('focusnotes.widgetDisplayMode')
-    if (mode === 'floating' || mode === 'desktop') void changeWidgetMode(mode)
+    if (mode === 'normal' || mode === 'floating' || mode === 'desktop') void changeWidgetMode(mode)
   }, [changeWidgetMode])
   useEffect(() => window.focusDesktop?.onWidgetDisplayError?.((message) => setWidgetModeError(message)), [])
   const [themeMode, setThemeMode] = useState<ThemeMode>(loadThemeMode)
-  const [palette, setPalette] = useState(() => resolvePalette(window.localStorage.getItem('focusnotes.palette') ?? 'mist').id)
+  const [palette, setPalette] = useState(() => resolvePalette(window.localStorage.getItem('focusnotes.palette')).id)
   const [motion, setMotion] = useState(() => resolveMotion(window.localStorage.getItem('focusnotes.motion')))
-  const uiHydratedRef = useRef(false)
+  const [hydratedUi, setHydratedUi] = useState<UiPreferences | null>(null)
 
   useEffect(() => {
     if (!ws.ready) return
@@ -158,12 +176,12 @@ export default function App() {
     setGlassBackground(ui.glassBackground)
     setWidgetEnabled(ui.widgetEnabled)
     setMotion(ui.motion)
-    uiHydratedRef.current = true
+    setHydratedUi(ui)
   }, [ws.ready, ws.extras.preferences.ui])
 
   useEffect(() => {
-    if (!ws.ready || !uiHydratedRef.current) return
     const ui = ws.extras.preferences.ui
+    if (!ws.ready || hydratedUi !== ui) return
     const next = {
       ...ui,
       themeMode,
@@ -182,7 +200,7 @@ export default function App() {
       && next.sidebarOpen === ui.sidebarOpen && next.glassBackground === ui.glassBackground
       && next.widgetEnabled === ui.widgetEnabled && next.motion === ui.motion) return
     ws.updateExtras((current) => ({ ...current, preferences: { ...current.preferences, ui: next } }))
-  }, [ws.ready, ws.extras.preferences.ui, themeMode, palette, windowEffect, windowBlur, opacity, alwaysOnTop, sidebarPreference, glassBackground, widgetEnabled, motion, ws.updateExtras])
+  }, [ws.ready, ws.extras.preferences.ui, hydratedUi, themeMode, palette, windowEffect, windowBlur, opacity, alwaysOnTop, sidebarPreference, glassBackground, widgetEnabled, motion, ws.updateExtras])
 
   useEffect(() => {
     document.documentElement.dataset.motion = motion
@@ -242,14 +260,20 @@ export default function App() {
   useEffect(() => {
     window.localStorage.setItem('focusnotes.effect', windowEffect)
   }, [windowEffect])
+  useEffect(() => {
+    window.localStorage.setItem('focusnotes.liquidStrength', String(liquidStrength))
+  }, [liquidStrength])
+  useEffect(() => {
+    window.localStorage.setItem('focusnotes.windowBackground', windowBackgroundId)
+  }, [windowBackgroundId])
   useEffect(() => { window.localStorage.setItem('focusnotes.blur', String(windowBlur)) }, [windowBlur])
+  useEffect(() => { window.localStorage.setItem('focusnotes.liquidArtworkBlur', String(artworkBlur)) }, [artworkBlur])
   useEffect(() => {
     let alive = true
     const load = () => {
       void window.focusDesktop?.background.get().then((result) => {
         if (alive) {
           setGlassImage(result.image ?? null)
-          setGlassBackground(result.mode === 'image' ? 'image' : 'system')
         }
       }).catch(() => undefined)
     }
@@ -262,10 +286,11 @@ export default function App() {
   }, [])
   useEffect(() => {
     window.localStorage.setItem('focusnotes.glassBackground', glassBackground)
-    const material = windowEffect !== 'solid' && glassBackground === 'system' ? 'acrylic' : 'none'
+    if (!ws.ready || hydratedUi !== ws.extras.preferences.ui) return
+    const material = windowEffect !== 'solid' && windowBackgroundId === 'default' && glassBackground === 'system' ? 'acrylic' : 'none'
     window.focusDesktop?.setBackgroundMaterial(material)
     void window.focusDesktop?.background.setMode(glassBackground)
-  }, [glassBackground, windowEffect])
+  }, [glassBackground, windowEffect, windowBackgroundId, ws.ready, ws.extras.preferences.ui, hydratedUi])
   const pickGlassBackground = useCallback(async () => {
     setBackgroundBusy(true)
     setBackgroundError('')
@@ -273,6 +298,7 @@ export default function App() {
       const result = await window.focusDesktop?.background.pick()
       if (result?.ok) {
         setGlassImage(result.image ?? null)
+        setWindowBackgroundId('default')
         setGlassBackground('image')
       } else if (!result?.canceled) {
         setBackgroundError(result?.error || '选择背景图片失败。')
@@ -725,12 +751,16 @@ export default function App() {
     alwaysOnTop={alwaysOnTop}
     opacity={opacity}
     windowEffect={windowEffect}
-    windowBlur={windowBlur}
+    liquidStrength={liquidStrength}
+    onLiquidStrength={setLiquidStrength}
+    windowBackground={windowBackgroundId}
+    onWindowBackground={setWindowBackgroundId}
+    windowBlur={backgroundBlur}
     glassBackground={glassBackground}
     glassImage={glassImage}
     backgroundBusy={backgroundBusy}
     backgroundError={backgroundError}
-    onGlassBackground={(mode) => { setGlassBackground(mode); setBackgroundError('') }}
+    onGlassBackground={(mode) => { setWindowBackgroundId('default'); setGlassBackground(mode); setBackgroundError('') }}
     onPickGlassBackground={pickGlassBackground}
     onClearGlassBackground={clearGlassBackground}
     widgetEnabled={widgetEnabled}
@@ -744,7 +774,7 @@ export default function App() {
     onAlwaysOnTop={setAlwaysOnTop}
     onOpacity={setOpacity}
     onWindowEffect={setWindowEffect}
-    onWindowBlur={setWindowBlur}
+    onWindowBlur={usingArtwork ? setArtworkBlur : setWindowBlur}
     onWidgetEnabled={setWidgetEnabled}
     widgetDisplayMode={widgetDisplayMode}
     widgetModePending={widgetModePending}
@@ -770,8 +800,21 @@ export default function App() {
   />
 
 
-  return <div className={`app-shell effect-${windowEffect}`}>
-    {windowEffect !== 'solid' && <GlassBackdrop blur={windowBlur} mode={glassBackground} image={glassImage} />}
+  const customBackground = windowBackgroundId !== 'default'
+  const backgroundClass = customBackground ? ' has-window-background' : ''
+  const artworkClass = usingArtwork ? ' has-window-artwork' : ''
+  const liquid = windowEffect === 'liquid'
+  const liquidStyle = liquid ? { '--liquid-strength': liquidStrength / 100 } as CSSProperties : undefined
+  const backdrop = (customBackground || windowEffect !== 'solid') && (
+    <GlassBackdrop blur={windowEffect === 'solid' ? 0 : backgroundBlur}
+      mode={windowBackgroundId === 'desktop' ? 'wallpaper' : glassBackground}
+      image={glassImage} artwork={windowBackground.image} />
+  )
+
+  return <div className={`app-shell effect-${windowEffect}${backgroundClass}${artworkClass}`}
+    data-window-background={windowBackgroundId} style={liquidStyle}>
+    {liquid && <LiquidGlassLens strength={liquidStrength} />}
+    {!usingArtwork && backdrop}
     <IconRail
       view={view}
       theme={dark ? 'dark' : 'light'}
@@ -787,9 +830,11 @@ export default function App() {
     />
     <Sidebar visible={sidebarVisible} view={view} todos={todos} lists={lists} onNavigate={setView} onAddList={addList} />
     <main className="workspace">
+      {usingArtwork && backdrop}
       <TopBar
         title={title}
         subtitle={subtitle}
+        liquid={liquid}
         sidebarVisible={sidebarVisible}
         sidebarAvailable={taskView}
         onToggleSidebar={toggleSidebar}

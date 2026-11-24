@@ -16,6 +16,7 @@ import {
   type TodoItem,
   type WorkspaceExtras,
 } from '@focusnotes/core'
+import { resolvePalette } from './palettes'
 
 const TODOS_KEY = 'focusnotes.todos.v1'
 const EXTRAS_KEY = 'focusnotes.extras.v1'
@@ -62,10 +63,34 @@ export interface WorkspaceApi {
   notify(title: string, body: string): void
 }
 
+function normalizeDesktopExtras(raw: WorkspaceExtras | null): WorkspaceExtras {
+  const extras = normalizeExtras(raw)
+  if (raw?.preferences?.ui) return extras
+
+  const stored = (key: string) => localStorage.getItem('focusnotes.' + key)
+  const oldOpacity = stored('opacity')
+  const opacity = oldOpacity === null ? undefined : Number(oldOpacity)
+  const windowOpacity = opacity !== undefined && opacity <= 1 ? Math.round(opacity * 100) : opacity
+  const ui = {
+    themeMode: stored('theme'),
+    palette: resolvePalette(stored('palette')).id,
+    windowEffect: stored('effect'),
+    windowBlur: stored('blur') ?? undefined,
+    windowOpacity,
+    uiScale: stored('uiScale') ?? undefined,
+    sidebarOpen: stored('sidebar') !== 'closed',
+    alwaysOnTop: stored('pin') !== 'false',
+    glassBackground: stored('glassBackground'),
+    widgetEnabled: stored('widget') !== 'false',
+    motion: stored('motion'),
+  }
+  return normalizeExtras({ ...extras, preferences: { ...extras.preferences, ui } })
+}
+
 function localExtras(): WorkspaceExtras {
   try {
     const raw = localStorage.getItem(EXTRAS_KEY)
-    return normalizeExtras(raw ? JSON.parse(raw) : null)
+    return normalizeDesktopExtras(raw ? JSON.parse(raw) : null)
   } catch {
     return createDefaultExtras()
   }
@@ -154,7 +179,7 @@ export function useWorkspace(): WorkspaceApi {
           if (!alive) return
           profileIdRef.current = doc.profile.id
           store.hydrate(doc.todos)
-          const next = normalizeExtras(doc.extras)
+          const next = normalizeDesktopExtras(doc.extras)
           extrasRef.current = next
           setExtras(next)
           setProfile(doc.profile)
@@ -283,7 +308,7 @@ export function useWorkspace(): WorkspaceApi {
     changeVersion.current++
     profileIdRef.current = doc.profile.id
     store.hydrate(pendingTasks.current.get(doc.profile.id) ?? failedTasks.current.get(doc.profile.id) ?? doc.todos)
-    const next = pendingExtras.current.get(doc.profile.id) ?? normalizeExtras(doc.extras)
+    const next = pendingExtras.current.get(doc.profile.id) ?? normalizeDesktopExtras(doc.extras)
     extrasRef.current = next
     setExtras(next)
     setProfile(doc.profile)

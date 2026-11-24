@@ -13,7 +13,6 @@ import {
 } from '@focusnotes/core'
 import type { WidgetData } from './desktop'
 import { resolveMotion } from './motion'
-import { GlassBackdrop } from './components/GlassBackdrop'
 import { QUADRANT_GRID_ORDER, QUADRANT_ICONS } from './taskIcons'
 
 const QUADRANT_PALETTES: Record<string, Record<Quadrant, string>> = {
@@ -65,26 +64,7 @@ export function WidgetWindow() {
   const [title, setTitle] = useState('')
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
-  const [glassBackground, setGlassBackground] = useState<'system' | 'image'>('system')
-  const [glassImage, setGlassImage] = useState<string | null>(null)
-  const material = data?.appearance.material ?? 'frosted'
-
-  useEffect(() => {
-    let alive = true
-    const load = () => {
-      void window.focusDesktop?.background.get().then((result) => {
-        if (!alive) return
-        setGlassBackground(result.mode === 'image' ? 'image' : 'system')
-        setGlassImage(result.image ?? null)
-      }).catch(() => undefined)
-    }
-    load()
-    window.addEventListener('focus', load)
-    return () => {
-      alive = false
-      window.removeEventListener('focus', load)
-    }
-  }, [])
+  const material = data?.appearance.material === 'classic' ? 'classic' : 'liquid'
 
   useEffect(() => {
     const off = window.focusDesktop?.widget.onData(setData)
@@ -100,6 +80,7 @@ export function WidgetWindow() {
     root.style.setProperty('--w-scale', String((appearance?.fontSize || 100) / 100))
     root.style.setProperty('--w-density', `${appearance?.opacity ?? 100}%`)
     root.style.setProperty('--w-glass-transparency', `${appearance?.glassTransparency ?? 28}%`)
+    root.style.setProperty('--w-glass-strength', String((appearance?.glassStrength ?? 50) / 100))
   }, [data?.appearance])
 
   const kinds = useMemo(() => data?.widgets?.length ? data.widgets : (['tasks'] as WidgetKind[]), [data])
@@ -162,7 +143,6 @@ export function WidgetWindow() {
   const todayDate = useMemo(() => (data ? startOfDay(new Date(`${data.today}T00:00:00`)) : startOfDay(new Date())), [data])
 
   return <div className="widget-window" data-material={material}>
-    {material !== 'classic' && <GlassBackdrop blur={data?.appearance.glassBlur ?? 14} mode={glassBackground} image={glassImage} />}
     <header className="widget-grip">
       <span className="widget-motto" title={motto}>{motto}</span>
       <button className="widget-close" onClick={() => window.focusDesktop?.widget.close()} aria-label="关闭小部件"><X size={10} /></button>
@@ -209,8 +189,8 @@ export function WidgetWindow() {
               const Icon = QUADRANT_ICONS[quadrant]
               const count = data?.quadrantCounts?.[quadrant] ?? 0
               const meta = QUADRANTS[quadrant]
-              const palette = QUADRANT_PALETTES[data?.appearance.quadrantPalette ?? 'classic'] ?? QUADRANT_PALETTES.classic!
-              const color = palette[quadrant]
+              const palette = QUADRANT_PALETTES[data?.appearance.quadrantPalette ?? 'white']
+              const color = palette?.[quadrant]
               return <div key={quadrant} className="widget-quadrant" role="img" aria-label={`${meta.label}，${count} 项`} title={meta.label}>
                 <Icon size={19} color={color} aria-hidden="true" focusable="false" />
                 <strong style={{ color }}>{count}</strong>

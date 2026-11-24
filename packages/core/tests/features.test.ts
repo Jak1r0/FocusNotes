@@ -172,6 +172,13 @@ describe('normalizeExtras navigation backfill', () => {
     const out = normalizeExtras(legacy as never)
     expect(out.preferences.navHidden).toContain('search')
   })
+
+  it('removes the retired local notes entry from saved navigation settings', () => {
+    const out = normalizeExtras({ preferences: { navOrder: ['today', 'notes', 'memos'], navHidden: ['notes', 'search'] } })
+    expect(out.preferences.navOrder).not.toContain('notes')
+    expect(out.preferences.navOrder).toContain('memos')
+    expect(out.preferences.navHidden).toEqual(['search'])
+  })
 })
 describe('normalizeExtras widget input preferences', () => {
   it('keeps lock and click-through flags', () => {
@@ -211,25 +218,42 @@ describe('normalizeExtras widget presets', () => {
   it('keeps widget presets in the personal profile payload', () => {
     const out = normalizeExtras({
       version: 2,
+      preferences: { widget: { material: 'classic' } },
       widgetPresets: [{
         id: 'writing', name: '写作模式', displayMode: 'desktop', motion: 'light', savedAt: '2026-11-23T00:00:00.000Z',
-        widget: { material: 'liquid', motto: 'Write every day', glassTransparency: 40 },
+        widget: { material: 'frosted', motto: 'Write every day', glassTransparency: 40, glassStrength: 120 },
       }],
     } as never)
+    expect(out.preferences.widget.material).toBe('classic')
     expect(out.widgetPresets).toHaveLength(1)
     expect(out.widgetPresets[0]!.displayMode).toBe('desktop')
     expect(out.widgetPresets[0]!.motion).toBe('light')
     expect(out.widgetPresets[0]!.widget.material).toBe('liquid')
     expect(out.widgetPresets[0]!.widget.motto).toBe('Write every day')
+    expect(out.widgetPresets[0]!.widget.glassStrength).toBe(100)
+  })
+
+  it('opens legacy frosted widgets as liquid glass with the saved strength', () => {
+    const out = normalizeExtras({ preferences: { widget: { material: 'frosted', glassStrength: 24 } } })
+    expect(out.preferences.widget.material).toBe('liquid')
+    expect(out.preferences.widget.glassStrength).toBe(24)
   })
 
   it('defaults the widget motto and preset list', () => {
     const out = normalizeExtras({ version: 2, preferences: {} } as never)
     expect(out.preferences.widget.motto).toBe('Every Second Counts')
+    expect(out.preferences.widget.glassStrength).toBe(50)
     expect(out.widgetPresets).toEqual([])
   })
 })
 describe('normalizeExtras UI preferences', () => {
+  it('opens legacy frosted main windows as liquid glass and keeps the wallpaper blur', () => {
+    const out = normalizeExtras({ preferences: { ui: { windowEffect: 'frosted', windowBlur: 21 } } })
+    expect(out.preferences.ui.windowEffect).toBe('liquid')
+    expect(out.preferences.ui.windowBlur).toBe(21)
+    expect(normalizeExtras({ preferences: { ui: { windowEffect: 'solid' } } }).preferences.ui.windowEffect).toBe('solid')
+  })
+
   it('persists the quadrant palette and rail expansion', () => {
     const out = normalizeExtras({ version: 2, preferences: { railExpanded: true, widget: { quadrantPalette: 'klein' } } } as never)
     expect(out.preferences.railExpanded).toBe(true)
@@ -239,6 +263,6 @@ describe('normalizeExtras UI preferences', () => {
   it('defaults rail expansion and quadrant palette', () => {
     const out = normalizeExtras({ version: 2, preferences: {} } as never)
     expect(out.preferences.railExpanded).toBe(false)
-    expect(out.preferences.widget.quadrantPalette).toBe('classic')
+    expect(out.preferences.widget.quadrantPalette).toBe('white')
   })
 })
