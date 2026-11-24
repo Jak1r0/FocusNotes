@@ -22,6 +22,11 @@ export function tagViewId(tag: string): ViewId {
   return `tag:${tag}`
 }
 
+export function isTaskView(view: ViewId): boolean {
+  return view === 'today' || view === 'recent' || view === 'inbox' || view === 'completed' || view === 'trash'
+    || view.startsWith('list:') || view.startsWith('tag:')
+}
+
 export function activeListId(view: ViewId): string | null {
   return view.startsWith('list:') ? view.slice(5) : null
 }

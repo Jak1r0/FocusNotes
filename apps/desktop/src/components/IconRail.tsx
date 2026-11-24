@@ -13,8 +13,8 @@ import {
   Gauge,
 } from 'lucide-react'
 import type { NavId } from '@focusnotes/core'
-import type { ViewId } from '../navigation'
-import type { CSSProperties } from 'react'
+import { isTaskView, type ViewId } from '../navigation'
+import { updateGlassPointer } from '../glassInteraction'
 
 interface IconRailProps {
   view: ViewId
@@ -43,33 +43,33 @@ const NAV_DEFS: Record<NavId, { id: NavId; label: string; icon: typeof CalendarD
 }
 
 export function IconRail({ view, theme, profileName, expanded, onNavigate, onSearch, onSettings, onProfile, onToggleTheme, navOrder, navHidden }: IconRailProps) {
-  const isActive = (id: ViewId) => view === id || (id === 'today' && (view === 'recent' || view === 'inbox' || view.startsWith('list:') || view.startsWith('tag:')))
+  const isActive = (id: NavId) => view === id || (id === 'today' && isTaskView(view))
   // 渲染层兜底：navOrder 缺失的导航项也要显示，避免旧数据导致新功能不可见。
   const orderedNav = [
     ...navOrder.filter((id) => NAV_DEFS[id]),
     ...(Object.keys(NAV_DEFS) as NavId[]).filter((id) => !navOrder.includes(id)),
   ]
   const items = orderedNav.filter((id) => !navHidden.includes(id)).map((id) => NAV_DEFS[id]).filter(Boolean)
-  const selectedIndex = items.findIndex((item) => isActive(item.id as ViewId))
   const handle = (id: NavId) => id === 'search' ? onSearch() : onNavigate(id as ViewId)
   return (
     <nav className={`icon-rail${expanded ? ' expanded' : ''}`} aria-label="主导航">
-      <button className="rail-avatar" onClick={onProfile} title={`记录档案：${profileName}`} aria-label="切换记录档案">
+      <button className="rail-avatar glass-nav-control" onClick={onProfile} onPointerMove={updateGlassPointer}
+        data-tooltip={`记录档案：${profileName}`} aria-label="切换记录档案">
         <span>{(profileName || 'F').slice(0, 1).toUpperCase()}</span>
       </button>
       <div className="rail-group rail-navigation">
-        {selectedIndex >= 0 && <span className="rail-selection" aria-hidden="true"
-          style={{ '--selected-index': selectedIndex } as CSSProperties} />}
         {items.map((item) => {
           const Icon = item.icon
+          const active = isActive(item.id)
           return (
             <button
               key={item.id}
-              className={`rail-button${isActive(item.id as ViewId) ? ' active' : ''}`}
+              className={`rail-button glass-nav-control${active ? ' active' : ''}`}
               onClick={() => handle(item.id)}
-              title={item.label}
+              onPointerMove={updateGlassPointer}
+              data-tooltip={expanded ? undefined : item.label}
               aria-label={item.label}
-              aria-current={isActive(item.id as ViewId) ? 'page' : undefined}
+              aria-current={active ? 'page' : undefined}
             >
               <Icon size={20} strokeWidth={1.8} />
               <span className="rail-label">{item.label}</span>
@@ -79,11 +79,13 @@ export function IconRail({ view, theme, profileName, expanded, onNavigate, onSea
       </div>
       <div className="rail-spacer" />
       <div className="rail-group rail-bottom">
-        <button className="rail-button" onClick={onToggleTheme} title="切换明暗" aria-label="切换明暗">
+        <button className="rail-button glass-nav-control" onClick={onToggleTheme} onPointerMove={updateGlassPointer}
+          data-tooltip={expanded ? undefined : '切换明暗'} aria-label="切换明暗">
           {theme === 'dark' ? <Sun size={19} strokeWidth={1.8} /> : <Moon size={19} strokeWidth={1.8} />}
           <span className="rail-label">{theme === 'dark' ? '浅色模式' : '深色模式'}</span>
         </button>
-        <button className="rail-button" onClick={onSettings} title="设置" aria-label="设置">
+        <button className="rail-button glass-nav-control" onClick={onSettings} onPointerMove={updateGlassPointer}
+          data-tooltip={expanded ? undefined : '设置'} aria-label="设置">
           <Settings size={19} strokeWidth={1.8} />
           <span className="rail-label">设置</span>
         </button>

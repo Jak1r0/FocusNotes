@@ -41,8 +41,8 @@ export interface ReminderPayload {
 }
 
 export type ThemeMode = 'system' | 'light' | 'dark' | 'sun'
-export type WindowEffect = 'solid' | 'frosted' | 'liquid'
-export type WidgetDisplayMode = 'floating' | 'desktop'
+export type WindowEffect = import('@focusnotes/core').UiPreferences['windowEffect']
+export type WidgetDisplayMode = 'floating' | 'normal' | 'desktop'
 
 export interface WidgetItem {
   id: string
@@ -54,7 +54,7 @@ export interface WidgetItem {
   overdue: boolean
 }
 
-export interface WidgetAppearance extends Pick<import('@focusnotes/core').WidgetPreferences, 'material' | 'opacity' | 'glassTransparency' | 'glassBlur' | 'snap' | 'fontSize' | 'motto' | 'locked' | 'clickThrough' | 'quadrantPalette'> {
+export interface WidgetAppearance extends Pick<import('@focusnotes/core').WidgetPreferences, 'material' | 'opacity' | 'glassTransparency' | 'glassStrength' | 'snap' | 'fontSize' | 'motto' | 'locked' | 'clickThrough' | 'quadrantPalette'> {
   motion?: import('./motion').MotionMode
   fontFamily: string
 }
@@ -87,6 +87,7 @@ declare global {
     focusDesktop?: {
       minimize(): void
       setBackgroundMaterial(material: 'acrylic' | 'none'): void
+      glassWallpaper(): Promise<string | null>
       background: {
         get(): Promise<{ image: string | null; mode: 'system' | 'image' }>
         pick(): Promise<{ ok: boolean; image?: string; error?: string; canceled?: boolean }>

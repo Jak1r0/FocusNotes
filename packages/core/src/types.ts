@@ -105,15 +105,16 @@ export type FontId = 'system' | 'source-han-sans' | 'source-han-serif' | 'pingfa
 /** 左侧功能栏可排序/隐藏的视图。 */
 export type NavId = 'today' | 'memos' | 'pomodoro' | 'habits' | 'calendar' | 'quadrant' | 'widgets' | 'search' | 'assistant'
 
-export type QuadrantPaletteId = 'classic' | 'klein' | 'morandi' | 'dusk'
+export type QuadrantPaletteId = 'white' | 'classic' | 'klein' | 'morandi' | 'dusk'
 
 export interface WidgetPreferences {
-  material: 'frosted' | 'classic' | 'liquid'
+  material: 'classic' | 'liquid'
   /** Background density percentage. */
   opacity: number
   /** Transparency of the desktop widget glass background. */
   glassTransparency: number
   glassBlur: number
+  glassStrength: number
   darkMode: 'system' | 'light' | 'dark'
   alwaysOnTop: boolean
   snap: WidgetSnap
@@ -133,7 +134,7 @@ export interface WidgetPreferences {
 export interface WidgetPreset {
   id: string
   name: string
-  displayMode: 'floating' | 'desktop'
+  displayMode: 'floating' | 'normal' | 'desktop'
   motion: 'full' | 'light' | 'off'
   widget: WidgetPreferences
   savedAt: string
@@ -143,7 +144,7 @@ export interface WidgetPreset {
 export interface UiPreferences {
   themeMode: 'system' | 'light' | 'dark' | 'sun'
   palette: string
-  windowEffect: 'solid' | 'frosted' | 'liquid'
+  windowEffect: 'solid' | 'liquid'
   windowBlur: number
   windowOpacity: number
   alwaysOnTop: boolean

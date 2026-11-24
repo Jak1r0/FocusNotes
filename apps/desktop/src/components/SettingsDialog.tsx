@@ -27,7 +27,6 @@ import {
   Sunrise,
   Type,
   Upload,
-  Waves,
   X,
 } from 'lucide-react'
 import {
@@ -42,6 +41,7 @@ import {
   type WorkspacePreferences,
 } from '@focusnotes/core'
 import type { ThemeMode, WidgetDisplayMode, WindowEffect } from '../desktop'
+import { WINDOW_BACKGROUNDS, WINDOW_BACKGROUND_GROUPS, type WindowBackgroundId } from '../windowBackgrounds'
 import { PALETTES, type PaletteId } from '../palettes'
 import { MOTION_OPTIONS, resolveMotion, type MotionMode } from '../motion'
 import type { WidgetPreset } from '@focusnotes/core'
@@ -57,6 +57,8 @@ interface SettingsDialogProps {
   alwaysOnTop: boolean
   opacity: number
   windowEffect: WindowEffect
+  liquidStrength: number
+  windowBackground: WindowBackgroundId
   windowBlur: number
   glassBackground: 'system' | 'image'
   glassImage: string | null
@@ -76,6 +78,8 @@ interface SettingsDialogProps {
   onAlwaysOnTop: (value: boolean) => void
   onOpacity: (value: number) => void
   onWindowEffect: (effect: WindowEffect) => void
+  onLiquidStrength: (strength: number) => void
+  onWindowBackground: (background: WindowBackgroundId) => void
   onWindowBlur: (blur: number) => void
   onGlassBackground: (mode: 'system' | 'image') => void
   onPickGlassBackground: () => void
@@ -112,7 +116,6 @@ const THEMES: { id: ThemeMode; label: string; icon: typeof Sun }[] = [
 
 const EFFECTS: { id: WindowEffect; label: string; hint: string; icon: typeof Sparkles }[] = [
   { id: 'solid', label: '纯色', hint: '清晰稳定', icon: Sparkles },
-  { id: 'frosted', label: '毛玻璃', hint: '半透明雾面', icon: Waves },
   { id: 'liquid', label: '液态玻璃', hint: '半透明渐层与边缘高光', icon: Droplets },
 ]
 
@@ -291,9 +294,42 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 <div className="scale-legend"><span>80%</span><span>100%</span><span>140%</span></div>
               </div>
               <div className="settings-group">
+                <span className="settings-label" id="window-background-label">主窗口背景</span>
+                <div role="group" aria-labelledby="window-background-label">
+                  {WINDOW_BACKGROUND_GROUPS.map((group) => (
+                    <div key={group.id}>
+                      {group.label && <span className="background-category">{group.label}</span>}
+                      <div className={`background-grid${group.id === 'system' ? ' background-grid-system' : ''}`}>
+                        {WINDOW_BACKGROUNDS.filter((background) => background.group === group.id).map(({ id, label, image }) => {
+                          const selected = props.windowBackground === id
+                          return (
+                            <button key={id} type="button" className={`theme-card${selected ? ' active' : ''}`}
+                              aria-pressed={selected} onClick={() => props.onWindowBackground(id)}>
+                              {image ? <span className="background-card-preview" aria-hidden="true"><img src={image} alt="" /></span>
+                                : id === 'desktop' ? <Monitor size={15} aria-hidden="true" /> : <LayoutGrid size={15} aria-hidden="true" />}
+                              <span>{label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="settings-group">
                 <span className="settings-label">窗口质感</span>
                 <EffectPicker value={props.windowEffect} onChange={props.onWindowEffect} />
-                {props.windowEffect !== 'solid' && <BlurControl value={props.windowBlur} onChange={props.onWindowBlur} />}
+                {props.windowEffect === 'liquid' && (
+                  <label className="settings-row">
+                    <span><strong>玻璃强度</strong><small>从柔和雾面到明亮玻璃，调节通透度、折射和高光</small></span>
+                    <div className="range-wrap">
+                      <input type="range" min={0} max={100} step={1} value={props.liquidStrength}
+                        onChange={(event) => props.onLiquidStrength(event.currentTarget.valueAsNumber)}
+                        aria-label="玻璃强度" aria-valuetext={`${props.liquidStrength}%`} />
+                      <output>{props.liquidStrength}%</output>
+                    </div>
+                  </label>
+                )}
               </div>
               <div className="settings-group">
                 <label className="settings-row">
@@ -313,6 +349,8 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     {props.glassImage && <img className="background-preview" src={props.glassImage} alt="自定义玻璃背景预览" />}
                   </div>
                 )}
+                {props.windowEffect === 'liquid' && (props.windowBackground !== 'default' || (props.glassBackground === 'image' && props.glassImage)) &&
+                  <BlurControl value={props.windowBlur} onChange={props.onWindowBlur} />}
               </div>
               <div className="settings-group">
                 <label className="settings-row">
@@ -414,6 +452,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                     onChange={(event) => props.onWidgetDisplayMode(event.target.value as WidgetDisplayMode)}>
                     <option value="floating">浮动于其他 App 上方</option>
 
+                    <option value="normal">普通窗口</option>
                     <option value="desktop">固定到桌面</option>
                   </select>
                 </label>
@@ -439,21 +478,30 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 <label className="settings-row">
                   <span><strong>四象限配色</strong><small>仅图标显示，可选克莱因蓝等组合</small></span>
                   <select value={widget.quadrantPalette} onChange={(event) => props.onWidgetPreferences({ quadrantPalette: event.target.value as import('@focusnotes/core').QuadrantPaletteId })}>
+                    <option value="white">纯白</option>
                     <option value="classic">经典</option>
                     <option value="klein">克莱因蓝</option>
                     <option value="morandi">莫兰迪</option>
                     <option value="dusk">暮色</option>
                   </select>
                 </label>
-                <EffectPicker value={widget.material === 'classic' ? 'solid' : widget.material}
-                  onChange={(effect) => props.onWidgetPreferences({ material: effect === 'solid' ? 'classic' : effect })} />
-                {widget.material !== 'classic' && <BlurControl value={widget.glassBlur} onChange={(glassBlur) => props.onWidgetPreferences({ glassBlur })} />}
+                <EffectPicker value={widget.material === 'classic' ? 'solid' : 'liquid'}
+                  onChange={(effect) => props.onWidgetPreferences({ material: effect === 'solid' ? 'classic' : 'liquid' })} />
                 {widget.material !== 'classic' && (
                   <>
+                    <label className="settings-row">
+                      <span><strong>玻璃强度</strong><small>由柔和到明亮，调节表面和四周高光</small></span>
+                      <div className="range-wrap">
+                        <input type="range" min={0} max={100} step={1} value={widget.glassStrength}
+                          aria-label="小部件玻璃强度" aria-valuetext={`${widget.glassStrength}%`}
+                          onChange={(event) => props.onWidgetPreferences({ glassStrength: event.currentTarget.valueAsNumber })} />
+                        <output>{widget.glassStrength}%</output>
+                      </div>
+                    </label>
                     <div className="settings-row">
-                      <span><strong>雾面透明度</strong><small>数值越高，背景越通透</small></span>
+                      <span><strong>玻璃透明度</strong><small>数值越高，背景越通透</small></span>
                       <button type="button" className="secondary-button" aria-expanded={glassControlsOpen}
-                        aria-controls={glassControlsId} aria-label={`调整雾面透明度，当前 ${widget.glassTransparency}%`}
+                        aria-controls={glassControlsId} aria-label={`调整玻璃透明度，当前 ${widget.glassTransparency}%`}
                         onClick={() => setGlassControlsOpen((open) => !open)}>
                         {glassControlsOpen ? '收起' : '调整'} · {widget.glassTransparency}%
                       </button>
@@ -463,7 +511,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
                         <span><strong>透明度</strong></span>
                         <div className="range-wrap">
                           <input type="range" min={0} max={100} step={1} value={widget.glassTransparency}
-                            aria-label="雾面透明度" aria-valuetext={`${widget.glassTransparency}%`}
+                            aria-label="玻璃透明度" aria-valuetext={`${widget.glassTransparency}%`}
                             onChange={(event) => props.onWidgetPreferences({ glassTransparency: Number(event.target.value) })} />
                           <output>{widget.glassTransparency}%</output>
                         </div>

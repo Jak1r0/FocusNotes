@@ -3,6 +3,7 @@ import { CheckCircle2, Hash, History, ListTodo, NotebookPen, Plus, Trash2 } from
 import { addDays, dateKey, type TodoItem, type TodoList } from '@focusnotes/core'
 import { listViewId, tagViewId, type ViewId } from '../navigation'
 import { listIcon } from '../taskIcons'
+import { updateGlassPointer } from '../glassInteraction'
 
 interface SidebarProps {
   visible: boolean
@@ -83,8 +84,10 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: 
             return (
               <button
                 key={item.id}
-                className={`side-row${view === item.id ? ' active' : ''}`}
+                className={`side-row glass-nav-control${view === item.id ? ' active' : ''}`}
                 onClick={() => onNavigate(item.id)}
+                onPointerMove={updateGlassPointer}
+                aria-current={view === item.id ? 'page' : undefined}
               >
                 <Icon size={16} strokeWidth={1.8} />
                 <span className="side-label">{item.label}</span>
@@ -97,7 +100,8 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: 
         <section className="side-section">
           <div className="side-heading">
             <span>清单</span>
-            <button className="icon-ghost tiny" onClick={() => setAdding((value) => !value)} title="新建清单" aria-label="新建清单">
+            <button className="icon-ghost tiny glass-nav-control" onClick={() => setAdding((value) => !value)}
+              onPointerMove={updateGlassPointer} title="新建清单" aria-label="新建清单" aria-expanded={adding}>
               <Plus size={14} />
             </button>
           </div>
@@ -125,8 +129,10 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: 
             return (
               <button
                 key={list.id}
-                className={`side-row list-row${active ? ' active' : ''}`}
+                className={`side-row list-row glass-nav-control${active ? ' active' : ''}`}
                 onClick={() => onNavigate(listViewId(list.id))}
+                onPointerMove={updateGlassPointer}
+                aria-current={active ? 'page' : undefined}
               >
                 <Icon size={16} strokeWidth={1.8} aria-hidden="true" />
                 <span className="side-label">{list.name}</span>
@@ -145,8 +151,10 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: 
               {tags.map(([tag, count]) => (
                 <button
                   key={tag}
-                  className={`tag-chip${view === tagViewId(tag) ? ' active' : ''}`}
+                  className={`tag-chip glass-nav-control${view === tagViewId(tag) ? ' active' : ''}`}
                   onClick={() => onNavigate(tagViewId(tag))}
+                  onPointerMove={updateGlassPointer}
+                  aria-current={view === tagViewId(tag) ? 'page' : undefined}
                 >
                   <Hash size={11} />
                   {tag}
@@ -159,12 +167,16 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: 
       </div>
 
       <div className="sidebar-foot">
-        <button className={`side-row${view === 'completed' ? ' active' : ''}`} onClick={() => onNavigate('completed')}>
+        <button className={`side-row glass-nav-control${view === 'completed' ? ' active' : ''}`}
+          onClick={() => onNavigate('completed')} onPointerMove={updateGlassPointer}
+          aria-current={view === 'completed' ? 'page' : undefined}>
           <CheckCircle2 size={16} strokeWidth={1.8} />
           <span className="side-label">已完成</span>
           <span className="side-count">{stats.completed}</span>
         </button>
-        <button className={`side-row${view === 'trash' ? ' active' : ''}`} onClick={() => onNavigate('trash')}>
+        <button className={`side-row glass-nav-control${view === 'trash' ? ' active' : ''}`}
+          onClick={() => onNavigate('trash')} onPointerMove={updateGlassPointer}
+          aria-current={view === 'trash' ? 'page' : undefined}>
           <Trash2 size={16} strokeWidth={1.8} />
           <span className="side-label">垃圾桶</span>
           {stats.trash > 0 && <span className="side-count">{stats.trash}</span>}

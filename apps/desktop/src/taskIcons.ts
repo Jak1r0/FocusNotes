@@ -1,8 +1,8 @@
 import {
+  Archive,
   BookOpen,
   BriefcaseBusiness,
-  CalendarClock,
-  Coffee,
+  Calendar,
   Dumbbell,
   Heart,
   Inbox,
@@ -16,13 +16,13 @@ import {
 import type { Quadrant } from '@focusnotes/core'
 
 export const QUADRANT_GRID_ORDER: readonly Quadrant[] = [
-  'important-urgent', 'important-not-urgent',
-  'not-important-urgent', 'not-important-not-urgent',
+  'not-important-urgent', 'important-urgent',
+  'not-important-not-urgent', 'important-not-urgent',
 ]
 
 export const QUADRANT_ICONS: Record<Quadrant, LucideIcon> = {
-  'not-important-not-urgent': Coffee,
-  'important-not-urgent': CalendarClock,
+  'not-important-not-urgent': Archive,
+  'important-not-urgent': Calendar,
   'not-important-urgent': Timer,
   'important-urgent': Rocket,
 }

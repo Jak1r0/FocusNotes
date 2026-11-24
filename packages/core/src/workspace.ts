@@ -48,11 +48,11 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   dailyGoal: 8,
   sound: true,
   font: 'system',
-  widget: { material: 'frosted', opacity: 100, glassTransparency: 28, glassBlur: 14, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100, locked: false, clickThrough: false, motto: 'Every Second Counts', quadrantPalette: 'classic' },
+  widget: { material: 'liquid', opacity: 100, glassTransparency: 28, glassBlur: 14, glassStrength: 50, darkMode: 'system', alwaysOnTop: true, snap: 'top-right', fontSize: 100, locked: false, clickThrough: false, motto: 'Every Second Counts', quadrantPalette: 'white' },
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
   navHidden: ['search'],
   railExpanded: false,
-  ui: { themeMode: 'system', palette: 'mist', windowEffect: 'frosted', windowBlur: 14, windowOpacity: 100, alwaysOnTop: true, uiScale: 1, sidebarOpen: true, glassBackground: 'system', widgetEnabled: true, motion: 'full' },
+  ui: { themeMode: 'system', palette: 'tide', windowEffect: 'liquid', windowBlur: 14, windowOpacity: 100, alwaysOnTop: true, uiScale: 1, sidebarOpen: true, glassBackground: 'system', widgetEnabled: true, motion: 'full' },
 }
 
 export const NAV_ITEMS: Array<{ id: NavId; label: string }> = [
@@ -447,7 +447,7 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
   const widgetOpacity = numberIn(widgetPref.opacity, DEFAULT_PREFERENCES.widget.opacity, 20, 100)
   const previousGlassTransparency = Math.round(55 - widgetOpacity * .27)
   const validSnaps: WidgetSnap[] = ['none', 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'top', 'follow-app']
-  const validQuadrantPalettes: QuadrantPaletteId[] = ['classic', 'klein', 'morandi', 'dusk']
+  const validQuadrantPalettes: QuadrantPaletteId[] = ['white', 'classic', 'klein', 'morandi', 'dusk']
   const snap = widgetPref.snap
   const validNav = NAV_ITEMS.map((item) => item.id)
   const rawOrder = Array.isArray(prefRecord.navOrder) ? prefRecord.navOrder.filter((id): id is NavId => validNav.includes(id as NavId)) : []
@@ -470,6 +470,7 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
       opacity: widgetOpacity,
       glassTransparency: numberIn(widgetPref.glassTransparency ?? previousGlassTransparency, previousGlassTransparency, 0, 100),
       glassBlur: numberIn(widgetPref.glassBlur ?? DEFAULT_PREFERENCES.widget.glassBlur, DEFAULT_PREFERENCES.widget.glassBlur, 0, 32),
+      glassStrength: numberIn(widgetPref.glassStrength ?? DEFAULT_PREFERENCES.widget.glassStrength, DEFAULT_PREFERENCES.widget.glassStrength, 0, 100),
       darkMode: widgetPref.darkMode === 'light' || widgetPref.darkMode === 'dark' ? widgetPref.darkMode : 'system',
       alwaysOnTop: widgetPref.alwaysOnTop !== false,
       snap: typeof snap === 'string' && validSnaps.includes(snap as WidgetSnap) ? snap as WidgetSnap : 'top-right',
@@ -479,15 +480,15 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
       motto: text(widgetPref.motto, DEFAULT_PREFERENCES.widget.motto, 80) || DEFAULT_PREFERENCES.widget.motto,
       quadrantPalette: validQuadrantPalettes.includes(widgetPref.quadrantPalette as QuadrantPaletteId)
         ? widgetPref.quadrantPalette as QuadrantPaletteId
-        : 'classic',
+        : DEFAULT_PREFERENCES.widget.quadrantPalette,
     },
     navOrder,
     navHidden,
     railExpanded: prefRecord.railExpanded === true,
     ui: {
       themeMode: ['system', 'light', 'dark', 'sun'].includes(uiRecord.themeMode as string) ? uiRecord.themeMode as UiPreferences['themeMode'] : 'system',
-      palette: text(uiRecord.palette, 'mist', 40) || 'mist',
-      windowEffect: uiRecord.windowEffect === 'solid' || uiRecord.windowEffect === 'liquid' ? uiRecord.windowEffect : 'frosted',
+      palette: text(uiRecord.palette, DEFAULT_PREFERENCES.ui.palette, 40) || DEFAULT_PREFERENCES.ui.palette,
+      windowEffect: uiRecord.windowEffect === 'solid' ? 'solid' : DEFAULT_PREFERENCES.ui.windowEffect,
       windowBlur: numberIn(uiRecord.windowBlur, 14, 0, 32),
       windowOpacity: numberIn(uiRecord.windowOpacity, 100, 20, 100),
       alwaysOnTop: uiRecord.alwaysOnTop !== false,
@@ -519,15 +520,17 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
       const name = text(preset.name, '', 24)
       if (!id || !name || presetIds.has(id)) continue
       presetIds.add(id)
-      const displayMode = preset.displayMode === 'desktop' ? 'desktop' : 'floating'
+      const displayMode = preset.displayMode === 'desktop' || preset.displayMode === 'normal' ? preset.displayMode : 'floating'
       const motion = preset.motion === 'light' || preset.motion === 'off' ? preset.motion : 'full'
       const presetWidget = asRecord(preset.widget) ?? {}
       const widget: WidgetPreferences = {
         ...preferences.widget,
-        material: presetWidget.material === 'classic' || presetWidget.material === 'liquid' ? presetWidget.material : preferences.widget.material,
+        material: presetWidget.material === 'frosted' ? 'liquid'
+          : presetWidget.material === 'classic' || presetWidget.material === 'liquid' ? presetWidget.material : preferences.widget.material,
         opacity: numberIn(presetWidget.opacity, preferences.widget.opacity, 20, 100),
         glassTransparency: numberIn(presetWidget.glassTransparency, preferences.widget.glassTransparency, 0, 100),
         glassBlur: numberIn(presetWidget.glassBlur, preferences.widget.glassBlur, 0, 32),
+        glassStrength: numberIn(presetWidget.glassStrength ?? preferences.widget.glassStrength, preferences.widget.glassStrength, 0, 100),
         darkMode: presetWidget.darkMode === 'light' || presetWidget.darkMode === 'dark' ? presetWidget.darkMode : preferences.widget.darkMode,
         alwaysOnTop: presetWidget.alwaysOnTop !== false,
         snap: typeof presetWidget.snap === 'string' && validSnaps.includes(presetWidget.snap as WidgetSnap) ? presetWidget.snap as WidgetSnap : preferences.widget.snap,
