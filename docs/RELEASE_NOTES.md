@@ -1,5 +1,56 @@
 # FocusNotes 发布说明
 
+## 0.2.0（Windows / Android）
+
+发布日期：2026-11-24
+
+| 平台 | 版本号 | 说明 |
+| --- | --- | --- |
+| Windows | 0.2.0 | 安装包目录 `apps/desktop/release-020` |
+| Android | 0.2.0（versionCode 8） | 可从 0.1.4 覆盖安装 |
+| 核心包 `@focusnotes/core` | 0.2.0 | 版本与 UI 偏好同步 |
+
+### 主要变更
+
+- Windows Liquid Glass 与桌面小组件视觉重构，任务添加栏在玻璃模式下改为透明模糊背景。
+- 桌面任务栏/快捷方式图标与移动端统一为蓝色圆角方块 + 白色对勾。
+- 左侧导航悬停不再位移；备忘录编辑区加大。
+- 主题、窗口质感、模糊、透明度、置顶、侧栏、玻璃背景、小组件开关与动效等 UI 设置写入个人档案 JSON，同步后自动恢复。
+- Android 支持本地创建写入系统日历、同步新待办提示加入日历、读取系统日历转为待办，以及「立即导入日历」按钮与数量提示。
+
+### 修复内容
+
+- 修复任务添加栏在玻璃背景下呈现黑色不透明的问题。
+- 修复桌面图标仍为旧原子图标的问题。
+- 修复导航悬停时图标移动与备忘录输入区过小的问题。
+- 修复 UI 设置仅保存在本机、不随个人档案同步的问题。
+
+### 兼容性
+
+- **数据格式**：`WorkspacePreferences.ui` 新增；旧数据自动补默认值。
+- **Android**：`versionCode` 8，可从 0.1.4 覆盖；2.x 需卸载。
+- **签名**：APK 内嵌 v1 / v2 / v3，证书 SHA-256 `7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`。
+- **APK SHA-256**：`a90a08960b13937f4a4a7bea3fd35971d93400d7edf17a38b81b7c41e3af32e9`。
+- **Windows SHA-256**：`38115e14964d6fc37dcb86eeaefe87384e4266af1ea56d917c1bc931890f4475`。
+- **附件**：`FocusNotes-0.2.0-cert.pem`、`FocusNotes-0.2.0.apk.sha256`。
+
+### 升级注意事项
+
+1. 升级前导出 JSON 备份。
+2. Android 0.1.4 → 0.2.0 可直接覆盖；2.x 需先卸载。
+3. 系统日历功能需要 Android 日历读写权限。
+4. Windows 安装包未做代码签名。
+
+### 验证记录
+
+```powershell
+npm run typecheck   # core / desktop / mobile 通过
+npm test            # 3 个测试文件，60 项通过
+npm run dist -w @focusnotes/desktop  # Setup 0.2.0
+gradlew assembleRelease  # APK 0.2.0，versionCode 8
+npm run sign:apk / verify:release  # 通过
+```
+
 ## 0.1.4（Windows / Android）
 
 发布日期：2026-11-23

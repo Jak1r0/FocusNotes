@@ -19,8 +19,8 @@ android {
         applicationId "com.focusnotes"
         minSdk rootProject.ext.minSdkVersion
         targetSdk rootProject.ext.targetSdkVersion
-        versionCode 7
-        versionName "0.1.4"
+        versionCode 8
+        versionName "0.2.0"
     }
     buildFeatures { buildConfig true }
     signingConfigs {
