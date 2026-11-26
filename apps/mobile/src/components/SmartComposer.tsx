@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ActivityIndicator, StyleSheet } from 'react-native'
 import {
   ThemedPressable as Pressable,
@@ -7,21 +7,28 @@ import {
   ThemedView as View,
 } from '../theme'
 import { ArrowUp, Check, Sparkles, X } from 'lucide-react-native'
-import { HybridSmartParser, type ParsedTodoDraft, type TodoDraft } from '@focusnotes/core'
+import { HybridSmartParser, type ParsedTodoDraft, type TodoDraft, type WorkspacePreferences } from '@focusnotes/core'
+import { loadMobileAiConfig, recognizeWithAi } from '../ai'
 import { DueField } from './DueField'
 
 const parser = new HybridSmartParser()
 
-export function SmartComposer({ onAdd }: { onAdd(draft: TodoDraft): Promise<void> }) {
+export function SmartComposer({ onAdd, preferences }: { onAdd(draft: TodoDraft): Promise<void>; preferences: WorkspacePreferences }) {
   const [input, setInput] = useState('')
   const [preview, setPreview] = useState<ParsedTodoDraft | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [aiReady, setAiReady] = useState(false)
+  useEffect(() => { void loadMobileAiConfig(preferences.ui).then((config) => setAiReady(Boolean(config))).catch(() => setAiReady(false)) }, [preferences.ui])
 
   async function recognize() {
     if (!input.trim()) { setError('请输入待办内容。'); return }
     setBusy(true); setError('')
-    try { setPreview(await parser.parse(input)) }
+    try {
+      const config = await loadMobileAiConfig(preferences.ui).catch(() => null)
+      const aiResult = config ? await recognizeWithAi(config, input).catch(() => null) : null
+      setPreview(aiResult ?? await parser.parse(input))
+    }
     catch { setError('识别暂时失败，请重试。') }
     finally { setBusy(false) }
   }
@@ -35,7 +42,7 @@ export function SmartComposer({ onAdd }: { onAdd(draft: TodoDraft): Promise<void
   }
 
   return <View style={styles.card}>
-    <View style={styles.labelRow}><Sparkles size={15} color="#0071e3" /><Text style={styles.label}>智能创建</Text><Text style={styles.badge}>本地识别</Text></View>
+    <View style={styles.labelRow}><Sparkles size={15} color="#0071e3" /><Text style={styles.label}>智能创建</Text><Text style={styles.badge}>{aiReady ? '大模型识别' : '本地识别'}</Text></View>
     <View style={styles.inputRow}>
       <TextInput style={styles.input} value={input} onChangeText={(value) => { setInput(value); setError('') }} placeholder="例如：明天下午3点提交重要报告" placeholderTextColor="#8e8d93" multiline />
       <Pressable style={styles.send} onPress={() => void recognize()} disabled={busy} accessibilityLabel="智能识别">{busy ? <ActivityIndicator color="#fff" size="small" /> : <ArrowUp size={21} color="#fff" />}</Pressable>

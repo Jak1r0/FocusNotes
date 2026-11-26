@@ -10,6 +10,7 @@ interface PomodoroViewProps {
   tasks: TodoItem[]
   timer: PomodoroTimerApi
   completion: TodayCompletion
+  notice?: string
 }
 
 function formatClock(totalSeconds: number): string {
@@ -25,7 +26,7 @@ function sessionTime(iso: string): string {
   return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-export function PomodoroView({ preferences, sessions, tasks, timer, completion }: PomodoroViewProps) {
+export function PomodoroView({ preferences, sessions, tasks, timer, completion, notice }: PomodoroViewProps) {
   const { mode, phase, running, remaining, elapsed, taskId, setMode, setTaskId, toggle, reset, finishStopwatch } = timer
   const noise = useWhiteNoise()
 
@@ -44,6 +45,7 @@ export function PomodoroView({ preferences, sessions, tasks, timer, completion }
   return (
     <div className="pomodoro-layout">
       <section className="pomodoro-main card">
+        {notice && <div className="pomodoro-notice" role="status">🎉 {notice}</div>}
         <div className="segmented">
           <button className={mode === 'countdown' ? 'active' : ''} onClick={() => setMode('countdown')}>番茄计时</button>
           <button className={mode === 'stopwatch' ? 'active' : ''} onClick={() => setMode('stopwatch')}>正计时</button>

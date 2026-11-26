@@ -422,8 +422,9 @@ function todayCompletionMain({ todos, extras, now }) {
         if (Number.isFinite(start) && startOfDayLocal(new Date(start)) > startOfDayLocal(now)) return false
         if (habit.frequency === 'weekdays' && [0, 6].includes(now.getDay())) return false
         if (habit.frequency === 'weekends' && ![0, 6].includes(now.getDay())) return false
-        const logs = extras.habitLogs && Array.isArray(extras.habitLogs[habit.id]) ? extras.habitLogs[habit.id] : []
-        return logs.includes(today)
+        const raw = extras.habitLogs && extras.habitLogs[habit.id]
+        const count = Array.isArray(raw) ? (raw.includes(today) ? 1 : 0) : Number(raw && raw[today]) || 0
+        return count >= Math.max(1, Number(habit.goal) || 1)
       }).length
     : 0
   const sessions = Array.isArray(extras.focusSessions)
@@ -436,9 +437,14 @@ function startOfDayLocal(date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
 }
 
+function isAnniversaryMain(todo) {
+  return Array.isArray(todo.tags) && todo.tags.some((tag) => typeof tag === 'string' && tag.trim() === '纪念日')
+}
+
 function widgetData(doc = activeDoc()) {
   const todos = (doc.todos || []).filter((todo) => todo && !todo.deleted)
-  const open = todos.filter((todo) => !todo.completed).sort((a, b) => {
+  const taskTodos = todos.filter((todo) => !isAnniversaryMain(todo))
+  const open = taskTodos.filter((todo) => !todo.completed).sort((a, b) => {
     const left = a.dueAt ? Date.parse(a.dueAt) : Number.POSITIVE_INFINITY
     const right = b.dueAt ? Date.parse(b.dueAt) : Number.POSITIVE_INFINITY
     return left - right
@@ -460,7 +466,7 @@ function widgetData(doc = activeDoc()) {
     const day = localDay(new Date(todo.dueAt))
     if (Object.hasOwn(agendaCounts, day)) agendaCounts[day]++
   }
-  const completion = todayCompletionMain({ todos, extras, now })
+  const completion = todayCompletionMain({ todos: taskTodos, extras, now })
   return {
     today: localDay(now),
     appearance: { ...widgetPrefs, fontFamily, material },
@@ -481,7 +487,7 @@ function widgetData(doc = activeDoc()) {
     openCount: open.length,
     doneToday: completion.total,
     completion,
-    countdowns: open.filter((todo) => Array.isArray(todo.tags) && todo.tags.includes('纪念日') && todo.dueAt)
+    countdowns: todos.filter((todo) => isAnniversaryMain(todo) && todo.dueAt)
       .slice(0, 3)
       .map((todo) => ({ id: todo.id, title: todo.title, dueAt: todo.dueAt })),
   }
@@ -1226,9 +1232,22 @@ function registerIpc() {
     try {
       if (kind === 'all') {
         content = JSON.stringify({
-          app: 'FocusNotes', version: 1, exportedAt: new Date().toISOString(), profile: doc.name,
-          todos: doc.todos, lists: extras.lists || [], habits: extras.habits || [],
-          habitLogs: extras.habitLogs || {}, focusSessions: extras.focusSessions || [],
+          app: 'FocusNotes', version: 2, exportedAt: new Date().toISOString(), profile: doc.name,
+          todos: doc.todos,
+          // 完整工作区：偏好、小部件、预设、习惯、打卡、番茄、备忘录都在同一个个人文件里。
+          extras,
+          // 小部件位置与展示方式（散落在 userData 的状态文件里，这里一并收拢）。
+          widgetState: {
+            displayMode: savedWidgetDisplayMode,
+            positions: widgetState.positions,
+            lastDisplayId: widgetState.lastDisplayId,
+          },
+          // Gitee 只导出非凭据配置，令牌永不写入个人 JSON。
+          gitee: (() => {
+            const config = readJson(giteeConfigPath(), {})
+            const { token: _token, ...safe } = config
+            return safe
+          })(),
         }, null, 2)
       } else if (kind === 'lists') {
         const lists = Array.isArray(extras.lists) ? extras.lists : []
@@ -1283,10 +1302,33 @@ function registerIpc() {
           return { ok: false, message: '文件中没有可导入的数据。' }
         }
         if (Array.isArray(data.todos)) doc.todos = normalizeTodos(data.todos) || []
-        if (Array.isArray(data.lists)) extras.lists = data.lists.slice(0, 80)
-        if (Array.isArray(data.habits)) extras.habits = data.habits.slice(0, 200)
-        if (data.habitLogs && typeof data.habitLogs === 'object') extras.habitLogs = data.habitLogs
-        if (Array.isArray(data.focusSessions)) extras.focusSessions = data.focusSessions.slice(-3000)
+        if (data.extras && typeof data.extras === 'object') {
+          // v2 个人文件：完整偏好 / 小部件 / 预设 / 备忘录 / 打卡记录。
+          extras = { ...extras, ...data.extras }
+        } else {
+          if (Array.isArray(data.lists)) extras.lists = data.lists.slice(0, 80)
+          if (Array.isArray(data.habits)) extras.habits = data.habits.slice(0, 200)
+          if (data.habitLogs && typeof data.habitLogs === 'object') extras.habitLogs = data.habitLogs
+          if (Array.isArray(data.focusSessions)) extras.focusSessions = data.focusSessions.slice(-3000)
+          if (Array.isArray(data.widgets)) extras.widgets = data.widgets
+          if (Array.isArray(data.widgetPresets)) extras.widgetPresets = data.widgetPresets
+          if (data.preferences && typeof data.preferences === 'object') extras.preferences = data.preferences
+          if (data.memos !== undefined) extras.memos = data.memos
+        }
+        if (data.widgetState && typeof data.widgetState === 'object') {
+          if (['desktop', 'floating', 'normal'].includes(data.widgetState.displayMode)) {
+            savedWidgetDisplayMode = data.widgetState.displayMode
+            widgetDisplayMode = savedWidgetDisplayMode
+          }
+          if (data.widgetState.positions && typeof data.widgetState.positions === 'object') widgetState.positions = data.widgetState.positions
+          if (data.widgetState.lastDisplayId !== undefined) widgetState.lastDisplayId = data.widgetState.lastDisplayId
+          saveWidgetState()
+        }
+        if (data.gitee && typeof data.gitee === 'object') {
+          const previous = readJson(giteeConfigPath(), {})
+          // 保留本机已有令牌，只恢复非凭据项。
+          writeJson(giteeConfigPath(), { ...previous, ...data.gitee, token: previous.token || '' })
+        }
       } else {
         const lines = raw.replace(/^\uFEFF/, '').split(/\r?\n/).filter(Boolean)
         const parse = (line) => (line.match(/("([^"]|"")*"|[^,]*)/g) || []).map((cell) => cell.replace(/^"|"$/g, '').replace(/""/g, '"'))
@@ -1316,7 +1358,7 @@ function registerIpc() {
       doc.updatedAt = new Date().toISOString()
       saveDoc(doc)
       notifyWorkspaceChanged()
-      return { ok: true, message: '个人数据已导入。' }
+      return { ok: true, message: '个人数据已导入，设置与小部件偏好已恢复。' }
     } catch {
       return { ok: false, message: '文件无法解析，请选择 FocusNotes 导出的数据文件。' }
     }
@@ -1324,6 +1366,73 @@ function registerIpc() {
 
 /* ── Gitee 同步配置：令牌用 safeStorage 加密后落盘 ────────────── */
 function giteeConfigPath() { return path.join(dataDir, 'gitee.json') }
+
+/* ── AI 助手：OpenAI 兼容端点配置，密钥用 safeStorage 加密 ────── */
+function aiConfigPath() { return path.join(dataDir, 'ai.json') }
+
+function readAiConfig() {
+  const raw = readJson(aiConfigPath(), {})
+  let apiKey = ''
+  if (raw.apiKey && safeStorage.isEncryptionAvailable()) {
+    try { apiKey = safeStorage.decryptString(Buffer.from(raw.apiKey, 'base64')) } catch { apiKey = '' }
+  }
+  return { endpoint: raw.endpoint || '', model: raw.model || '', apiKey, temperature: Number(raw.temperature) || 0.4 }
+}
+
+ipcMain.handle('ai:get', () => {
+  const config = readAiConfig()
+  return { endpoint: config.endpoint, model: config.model, hasKey: Boolean(config.apiKey), temperature: config.temperature, encrypted: safeStorage.isEncryptionAvailable() }
+})
+
+ipcMain.handle('ai:set', (_event, config) => {
+  try {
+    const current = readJson(aiConfigPath(), {})
+    const nextKey = typeof config?.apiKey === 'string' && config.apiKey.trim() ? config.apiKey.trim() : null
+    const record = {
+      endpoint: String(config?.endpoint || '').trim(),
+      model: String(config?.model || '').trim(),
+      temperature: Math.min(2, Math.max(0, Number(config?.temperature) || 0.4)),
+      // 留空表示沿用旧密钥；明文永不落盘。
+      apiKey: nextKey && safeStorage.isEncryptionAvailable()
+        ? safeStorage.encryptString(nextKey).toString('base64')
+        : nextKey ? '' : current.apiKey || '',
+    }
+    writeJson(aiConfigPath(), record)
+    return { ok: true, encrypted: safeStorage.isEncryptionAvailable(), hasKey: Boolean(nextKey || current.apiKey) }
+  } catch (error) { return { ok: false, message: String(error) } }
+})
+
+ipcMain.handle('ai:chat', async (_event, payload) => {
+  const config = readAiConfig()
+  if (!config.endpoint || !config.model || !config.apiKey) {
+    return { ok: false, error: '请先在设置里填写模型接口地址、模型名称与 API 密钥。' }
+  }
+  const endpoint = config.endpoint.trim().replace(/\/+$/, '')
+  const url = /\/chat\/completions$/.test(endpoint)
+    ? endpoint
+    : `${endpoint.replace(/\/v1$/, '')}/v1/chat/completions`
+  const messages = Array.isArray(payload?.messages)
+    ? payload.messages.filter((item) => item && typeof item.content === 'string' && ['system', 'user', 'assistant'].includes(item.role)).slice(-24)
+    : []
+  if (!messages.length) return { ok: false, error: '没有可发送的消息。' }
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 30000)
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${config.apiKey}` },
+      body: JSON.stringify({ model: config.model, messages, temperature: config.temperature, stream: false }),
+      signal: controller.signal,
+    })
+    if (!response.ok) return { ok: false, error: `模型接口返回 ${response.status}，请检查配置。` }
+    const data = await response.json()
+    const text = data?.choices?.[0]?.message?.content ?? data?.choices?.[0]?.text
+    if (typeof text !== 'string' || !text.trim()) return { ok: false, error: '模型没有返回内容。' }
+    return { ok: true, text: text.trim(), model: config.model }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error && error.name === 'AbortError' ? '模型响应超时。' : `连接模型失败：${String(error)}` }
+  } finally { clearTimeout(timeout) }
+})
 
 ipcMain.handle('app:version', () => app.getVersion())
 

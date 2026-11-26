@@ -1,5 +1,5 @@
-import type { Memo, TodoItem, WorkspaceExtras } from './types'
-import { normalizeExtras } from './workspace'
+import type { HabitLog, HabitLogMap, Memo, TodoItem, WorkspaceExtras } from './types'
+import { habitCount, normalizeExtras } from './workspace'
 import { normalizeMemos } from './memo'
 import { mergeSyncedTodos } from './sync'
 
@@ -58,11 +58,19 @@ export function mergeSyncPayload(local: SyncPayload, remote: SyncPayload): SyncP
   const localExtras = normalizeExtras(local.extras)
   const remoteExtras = normalizeExtras(remote.extras)
 
-  const habitLogs: Record<string, string[]> = {}
+  const habitLogs: HabitLogMap = {}
   const habitIds = new Set([...Object.keys(localExtras.habitLogs), ...Object.keys(remoteExtras.habitLogs)])
   for (const habitId of habitIds) {
-    const days = new Set([...(localExtras.habitLogs[habitId] ?? []), ...(remoteExtras.habitLogs[habitId] ?? [])])
-    habitLogs[habitId] = [...days].sort()
+    const localDays = localExtras.habitLogs[habitId] ?? {}
+    const remoteDays = remoteExtras.habitLogs[habitId] ?? {}
+    const days = new Set([...Object.keys(localDays), ...Object.keys(remoteDays)])
+    const merged: HabitLog = {}
+    // 同一天两端都有记录时取较大次数，避免一端覆盖另一端的多次打卡。
+    for (const day of days) {
+      const count = Math.max(habitCount(localDays, day), habitCount(remoteDays, day))
+      if (count > 0) merged[day] = count
+    }
+    habitLogs[habitId] = merged
   }
 
   const mergedExtras: WorkspaceExtras = {

@@ -4,6 +4,7 @@ import {
   QUADRANTS,
   addDays,
   dateKey,
+  habitDayCount,
   habitStreak,
   isHabitScheduled,
   startOfDay,
@@ -203,8 +204,10 @@ export function WidgetWindow() {
           const habits = (data?.habits ?? []).filter((habit: Habit) => !habit.archived).slice(0, 3)
           return <Section key={kind} kind={kind} onOpen={openView}>
             {habits.length ? habits.map((habit) => {
-              const logs = data?.habitLogs[habit.id] ?? []
-              const done = logs.includes(data?.today ?? '')
+              const raw = data?.habitLogs[habit.id] ?? {}
+              const logs = Array.isArray(raw) ? raw.filter((day: string) => day === data?.today) : raw
+              const count = habitDayCount(data?.habitLogs ?? {}, habit.id, data?.today ?? '')
+              const done = count >= Math.max(1, habit.goal)
               const scheduled = isHabitScheduled(habit, todayDate)
               return <div key={habit.id} className="widget-habit">
                 <span>{habit.name}</span>
@@ -221,7 +224,8 @@ export function WidgetWindow() {
             const days = daysUntil(item.dueAt, data?.today ?? '')
             return <div key={item.id} className="widget-countdown">
               <strong>{days >= 0 ? days : Math.abs(days)}</strong>
-              <span>{days >= 0 ? '天后' : '天前'} · {item.title}</span>
+              <span className="widget-countdown-unit">{days >= 0 ? '天后' : '天前'}</span>
+              <span className="widget-countdown-title" title={item.title}>{item.title}</span>
             </div>
           }) : <p className="widget-empty">给任务加「纪念日」标签</p>}
         </Section>

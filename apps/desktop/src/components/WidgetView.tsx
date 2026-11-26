@@ -4,6 +4,7 @@ import {
   QUADRANTS,
   dateKey,
   getQuadrant,
+  habitDayCount,
   habitStreak,
   isHabitScheduled,
   startOfDay,
@@ -19,9 +20,10 @@ import { QUADRANT_GRID_ORDER, QUADRANT_ICONS } from '../taskIcons'
 interface WidgetViewProps {
   widgets: WidgetKind[]
   tasks: TodoItem[]
+  anniversaries: TodoItem[]
   lists: TodoList[]
   habits: Habit[]
-  habitLogs: Record<string, string[]>
+  habitLogs: Record<string, Record<string, number>>
   completion: TodayCompletion
   onNavigate: (view: ViewId) => void
   onToggleTask: (id: string) => void
@@ -37,13 +39,13 @@ const META: Record<WidgetKind, { title: string; icon: typeof ListTodo; view: Vie
   assistant: { title: 'AI 助手', icon: Bot, view: 'assistant' },
 }
 
-export function WidgetView({ widgets, tasks, lists, habits, habitLogs, completion, onNavigate, onToggleTask, onToggleHabit }: WidgetViewProps) {
+export function WidgetView({ widgets, tasks, anniversaries, lists, habits, habitLogs, completion, onNavigate, onToggleTask, onToggleHabit }: WidgetViewProps) {
   const open = tasks.filter((todo) => !todo.deleted && !todo.completed)
   const today = dateKey(new Date())
   const dueToday = open.filter((todo) => todo.dueAt && dateKey(todo.dueAt) === today)
   const countdowns = useMemo(
-    () => tasks.filter((todo) => !todo.deleted && todo.tags.includes('纪念日') && todo.dueAt).slice(0, 3),
-    [tasks],
+    () => anniversaries.slice(0, 3),
+    [anniversaries],
   )
   const activeHabits = habits.filter((habit) => !habit.archived)
 
@@ -128,18 +130,19 @@ export function WidgetView({ widgets, tasks, lists, habits, habitLogs, completio
             {kind === 'habits' && (
               <div className="widget-list">
                 {activeHabits.slice(0, 4).map((habit) => {
-                  const done = (habitLogs[habit.id] ?? []).includes(today)
+                  const count = habitDayCount(habitLogs, habit.id, today)
+                  const done = count >= Math.max(1, habit.goal)
                   const scheduled = isHabitScheduled(habit, new Date())
                   return (
                     <div key={habit.id} className="widget-habit">
                       <span>{habit.emoji} {habit.name}</span>
-                      <span className="widget-habit-meta"><Flame size={11} /> {habitStreak(habit, habitLogs[habit.id] ?? [], new Date())}</span>
+                      <span className="widget-habit-meta"><Flame size={11} /> {habitStreak(habit, habitLogs[habit.id] ?? {}, new Date())}</span>
                       <button
                         className={`habit-check small${done ? ' done' : ''}`}
                         disabled={!scheduled}
                         onClick={() => onToggleHabit(habit.id, today)}
                       >
-                        {done ? '已打卡' : scheduled ? '打卡' : '休息'}
+                        {done ? '已打卡' : scheduled ? habit.goal > 1 ? `${count}/${habit.goal}` : '打卡' : '休息'}
                       </button>
                     </div>
                   )
@@ -158,7 +161,8 @@ export function WidgetView({ widgets, tasks, lists, habits, habitLogs, completio
                     return (
                       <div key={todo.id} className="widget-countdown">
                         <strong>{days >= 0 ? days : Math.abs(days)}</strong>
-                        <span>{days >= 0 ? '天后' : '天前'} · {todo.title}</span>
+                        <span className="widget-countdown-unit">{days >= 0 ? '天后' : '天前'}</span>
+                        <span className="widget-countdown-title" title={todo.title}>{todo.title}</span>
                       </div>
                     )
                   })

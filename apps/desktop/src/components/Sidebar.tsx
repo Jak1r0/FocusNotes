@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { CheckCircle2, Hash, History, ListTodo, NotebookPen, Plus, Trash2 } from 'lucide-react'
-import { addDays, dateKey, type TodoItem, type TodoList } from '@focusnotes/core'
+import { addDays, dateKey, isAnniversary, type TodoItem, type TodoList } from '@focusnotes/core'
 import { listViewId, tagViewId, type ViewId } from '../navigation'
 import { listIcon } from '../taskIcons'
 import { updateGlassPointer } from '../glassInteraction'
@@ -16,7 +16,7 @@ interface SidebarProps {
 }
 
 function countActive(todos: TodoItem[]): number {
-  return todos.filter((todo) => !todo.completed && !todo.deleted).length
+  return todos.filter((todo) => !todo.completed && !todo.deleted && !isAnniversary(todo)).length
 }
 export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: SidebarProps) {
   const [adding, setAdding] = useState(false)
@@ -25,7 +25,7 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: 
   const stats = useMemo(() => {
     const today = dateKey(new Date())
     const weekAgo = dateKey(addDays(new Date(), -6))
-    const active = todos.filter((todo) => !todo.deleted)
+    const active = todos.filter((todo) => !todo.deleted && !isAnniversary(todo))
     const open = active.filter((todo) => !todo.completed)
     return {
       today: open.filter((todo) => todo.dueAt && dateKey(todo.dueAt) <= today).length,
@@ -39,7 +39,7 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: 
   const listCounts = useMemo(() => {
     const map = new Map<string, number>()
     for (const todo of todos) {
-      if (todo.deleted || todo.completed) continue
+      if (todo.deleted || todo.completed || isAnniversary(todo)) continue
       map.set(todo.listId, (map.get(todo.listId) ?? 0) + 1)
     }
     return map
@@ -48,7 +48,7 @@ export function Sidebar({ visible, view, todos, lists, onNavigate, onAddList }: 
   const tags = useMemo(() => {
     const map = new Map<string, number>()
     for (const todo of todos) {
-      if (todo.deleted) continue
+      if (todo.deleted || isAnniversary(todo)) continue
       for (const tag of todo.tags) map.set(tag, (map.get(tag) ?? 0) + 1)
     }
     return [...map.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-CN')).slice(0, 12)

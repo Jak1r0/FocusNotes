@@ -16,6 +16,12 @@ const COMBINED_DAY_TERMS: [RegExp, string][] = [
 
 const PERIOD_WORDS = '凌晨|清晨|早晨|早上|上午|中午|下午|傍晚|晚上|夜里|夜'
 
+const YEAR_OFFSETS: Record<string, number> = { 前年: -2, 去年: -1, 今年: 0, 明年: 1, 后年: 2 }
+const CN_NUMBER_WORD = '[零一二三四五六七八九十两]'
+const CN_MONTH_DAY = new RegExp(`(${Object.keys(YEAR_OFFSETS).join('|')})?(${CN_NUMBER_WORD}{1,3})月(${CN_NUMBER_WORD}{1,3})[日号]?`)
+const ARABIC_YEAR_MONTH_DAY = new RegExp(`(${Object.keys(YEAR_OFFSETS).join('|')})(\\d{1,2})月(\\d{1,2})[日号]?`)
+const ANNIVERSARY_WORDS = /生日|纪念日|周年|结婚纪念/i
+
 /** 只有时段、没有具体钟点时的默认时间。 */
 const PERIOD_DEFAULT_HOUR: Record<string, number> = {
   凌晨: 6, 清晨: 7, 早晨: 8, 早上: 9, 上午: 9, 中午: 12, 下午: 14, 傍晚: 18, 晚上: 20, 夜里: 21, 夜: 21,
@@ -84,17 +90,28 @@ export class LocalSmartParser {
     let day = now.getDate()
 
     const fullDate = source.match(/(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})日?/)
+    const arabicYearMonthDay = source.match(ARABIC_YEAR_MONTH_DAY)
+    const chineseMonthDay = source.match(CN_MONTH_DAY)
     const monthDay = source.match(/(\d{1,2})月(\d{1,2})[日号]/)
     const relative = source.match(/大后天|后天|明天|今天|今日/)
     const weekday = source.match(/(下周|这周|本周|周|星期)([一二三四五六日天])/)
     const duration = source.match(/(\d+)\s*(分钟|小时|天)\s*后/)
 
-    const hasExplicitDate = Boolean(fullDate || monthDay || relative || weekday)
+    const hasExplicitDate = Boolean(fullDate || arabicYearMonthDay || chineseMonthDay || monthDay || relative || weekday)
     const periodOnly = !hasExplicitDate && !duration && period !== null
 
     if (fullDate) {
       year = Number(fullDate[1]); month = Number(fullDate[2]); day = Number(fullDate[3])
       recognizedTerms.push(fullDate[0])
+    } else if (arabicYearMonthDay) {
+      year = now.getFullYear() + (YEAR_OFFSETS[arabicYearMonthDay[1]!] ?? 0)
+      month = Number(arabicYearMonthDay[2]); day = Number(arabicYearMonthDay[3])
+      recognizedTerms.push(arabicYearMonthDay[0])
+    } else if (chineseMonthDay) {
+      year = now.getFullYear() + (YEAR_OFFSETS[chineseMonthDay[1] ?? ''] ?? 0)
+      month = Number(cnToArabic(chineseMonthDay[2]!))
+      day = Number(cnToArabic(chineseMonthDay[3]!))
+      recognizedTerms.push(chineseMonthDay[0])
     } else if (monthDay) {
       month = Number(monthDay[1]); day = Number(monthDay[2])
       if (month < now.getMonth() + 1 || (month === now.getMonth() + 1 && day < now.getDate())) year += 1
@@ -122,7 +139,7 @@ export class LocalSmartParser {
       const unitMillis = { 分钟: 60000, 小时: 3600000, 天: 86400000 }[duration[2] as '分钟' | '小时' | '天']
       due = new Date(now.getTime() + Number(duration[1]) * unitMillis)
       recognizedTerms.push(duration[0])
-    } else if (fullDate || monthDay || relative || weekday || time || periodOnly) {
+    } else if (fullDate || arabicYearMonthDay || chineseMonthDay || monthDay || relative || weekday || time || periodOnly) {
       const fallbackHour = period !== null && !time ? PERIOD_DEFAULT_HOUR[period]! : 23
       const fallbackMinute = period !== null && !time ? 0 : 59
       due = validDate(year, month, day, time?.hour ?? fallbackHour, time?.minute ?? fallbackMinute)
@@ -138,8 +155,10 @@ export class LocalSmartParser {
     const important = /重要|关键|优先|高优先|important/i.test(source)
     const dueSoon = due !== null && due.getTime() >= now.getTime() && due.getTime() - now.getTime() <= 86400000
     const urgent = /紧急|急办|尽快|马上|立即|ASAP|urgent/i.test(source) || dueSoon
+    const anniversary = ANNIVERSARY_WORDS.test(source)
     if (important) recognizedTerms.push('重要')
     if (urgent) recognizedTerms.push('紧急')
+    if (anniversary) recognizedTerms.push('纪念日')
 
     const cleaned = stripTime(source)
       .replace(/重要且紧急|紧急且重要|重要不紧急|紧急不重要|重要|紧急|关键|高优先|优先|急办|尽快|马上|立即|ASAP|important|urgent/gi, '')
@@ -152,6 +171,7 @@ export class LocalSmartParser {
       dueAt: due?.toISOString() ?? null,
       important,
       urgent,
+      ...(anniversary ? { tags: ['纪念日'] } : {}),
       confidence: Math.min(0.95, 0.55 + (due ? 0.25 : 0) + (important ? 0.08 : 0) + (urgent ? 0.08 : 0)),
       recognizedTerms: [...new Set(recognizedTerms)],
       warnings,
@@ -163,8 +183,12 @@ function stripTime(source: string): string {
   return source
     .replace(/^(请|帮我|提醒我|添加|创建|新增|待办)[，,\s]*/g, '')
     .replace(/\d{4}[-/.年]\d{1,2}[-/.月]\d{1,2}日?/g, '')
+    .replace(ARABIC_YEAR_MONTH_DAY, '')
+    .replace(CN_MONTH_DAY, '')
     .replace(/\d{1,2}月\d{1,2}[日号]/g, '')
+    .replace(/前年|去年|今年|明年|后年/g, '')
     .replace(/大后天|后天|明天|今天|今日|下周[一二三四五六日天]|这周[一二三四五六日天]|本周[一二三四五六日天]|周[一二三四五六日天]|星期[一二三四五六日天]/g, '')
+    .replace(/(?<=是)我(?=生日|纪念日|周年)/g, '')
     .replace(/\d+\s*(?:分钟|小时|天)\s*后/g, '')
     .replace(new RegExp(`(${PERIOD_WORDS}|早|晨|晚)?\\s*\\d{1,2}(?::\\d{1,2}|[点时]\\d{1,2}分?|[点时])`, 'g'), '')
     .replace(new RegExp(PERIOD_WORDS, 'g'), '')

@@ -255,7 +255,7 @@ describe('习惯与工作区', () => {
     expect(extras.lists[0]?.id).toBe('inbox')
     expect(extras.lists).toHaveLength(2)
     expect(extras.habits[0]?.goal).toBe(20)
-    expect(extras.habitLogs.h2).toEqual(['2026-11-17'])
+    expect(extras.habitLogs.h2).toEqual({ '2026-11-17': 1 })
     expect(extras.widgets).toEqual(['habits'])
     expect(extras.preferences.pomodoroMinutes).toBe(50)
     expect(createDefaultExtras(now).lists).toHaveLength(7)

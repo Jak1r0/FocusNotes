@@ -67,6 +67,11 @@ contextBridge.exposeInMainWorld('focusDesktop', {
     get: () => ipcRenderer.invoke('gitee:get'),
     set: (config) => ipcRenderer.invoke('gitee:set', config),
   },
+  ai: {
+    get: () => ipcRenderer.invoke('ai:get'),
+    set: (config) => ipcRenderer.invoke('ai:set', config),
+    chat: (messages) => ipcRenderer.invoke('ai:chat', { messages }),
+  },
   profile: {
     read: () => ipcRenderer.invoke('profile:read'),
     write: (raw) => ipcRenderer.invoke('profile:write', raw),

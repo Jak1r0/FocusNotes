@@ -67,7 +67,7 @@ export interface WidgetData {
   quadrantCounts: Record<import('@focusnotes/core').Quadrant, number>
   widgets: import('@focusnotes/core').WidgetKind[]
   habits: import('@focusnotes/core').Habit[]
-  habitLogs: Record<string, string[]>
+  habitLogs: Record<string, Record<string, number>>
   openCount: number
   doneToday: number
   completion: import('@focusnotes/core').TodayCompletion
@@ -130,6 +130,11 @@ declare global {
   gitee: {
     get(): Promise<{ owner: string; repo: string; branch: string; path: string; token: string; profileId: string | null } | null>
     set(config: { owner: string; repo: string; branch: string; path?: string; token: string }): Promise<{ ok: boolean; encrypted?: boolean; message?: string }>
+  }
+  ai: {
+    get(): Promise<{ endpoint: string; model: string; hasKey: boolean; temperature: number; encrypted: boolean } | null>
+    set(config: { endpoint: string; model: string; apiKey?: string; temperature?: number }): Promise<{ ok: boolean; encrypted?: boolean; hasKey?: boolean; message?: string }>
+    chat(messages: Array<{ role: 'system' | 'user' | 'assistant'; content: string }>): Promise<{ ok: boolean; text?: string; model?: string; error?: string }>
   }
   profile: {
         read(): Promise<{ profile: { id: string; name: string }; todos: unknown[]; extras?: WorkspaceExtras | null }>

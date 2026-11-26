@@ -107,7 +107,7 @@ describe('mergeSyncPayload', () => {
       buildSyncPayload([], localExtras, new Date()),
       buildSyncPayload([], remoteExtras, new Date()),
     )
-    expect(merged.extras.habitLogs.h1).toEqual(['2026-11-18', '2026-11-19'])
+    expect(merged.extras.habitLogs.h1).toEqual({ '2026-11-18': 1, '2026-11-19': 1 })
   })
 
   it('is idempotent: merging the same payload twice yields the same result', () => {

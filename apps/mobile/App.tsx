@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Animated, Easing, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, Switch, TextInput, useColorScheme } from 'react-native'
+import { Alert, Animated, Easing, NativeModules, PermissionsAndroid, Platform, StatusBar, StyleSheet, Switch, TextInput, Vibration, useColorScheme } from 'react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import Slider from '@react-native-community/slider'
 import PagerView, { type PagerViewOnPageScrollEvent, type PagerViewOnPageSelectedEvent } from 'react-native-pager-view'
 import { CalendarDays, Check, Cloud, Database, Flame, ListTodo, NotebookPen, Plus, Upload, Download, Pencil, Settings, Timer } from 'lucide-react-native'
 import {
+  assistantEndpoint,
   buildSyncPayload,
   clampReminderMinutes,
   createDefaultExtras,
@@ -12,7 +13,11 @@ import {
   mergeSyncPayload,
   type GiteeConfig,
   dateKey,
+  checkInHabit,
+  habitCount,
+  habitDayCount,
   habitStreak,
+  isAnniversary,
   isDateKey,
   isHabitScheduled,
   mergeSyncedTodos,
@@ -24,7 +29,7 @@ import {
   resolvePageFromPager,
   QUADRANTS,
   TodoStore,
-  toggleHabitLog,
+  markHabitCount,
   type FocusSession,
   type Quadrant,
   type TodoItem,
@@ -87,9 +92,12 @@ function mergeExtras(local: WorkspaceExtras, incoming: unknown): WorkspaceExtras
   for (const item of remote.lists) lists.set(item.id, item)
   const habits = new Map(local.habits.map((item) => [item.id, item]))
   for (const item of remote.habits) habits.set(item.id, item)
-  const habitLogs: Record<string, string[]> = {}
+  const habitLogs: Record<string, Record<string, number>> = {}
   for (const habit of habits.values()) {
-    habitLogs[habit.id] = [...new Set([...(local.habitLogs[habit.id] ?? []), ...(remote.habitLogs[habit.id] ?? [])])].sort()
+    const days = new Set([...Object.keys(local.habitLogs[habit.id] ?? {}), ...Object.keys(remote.habitLogs[habit.id] ?? {})])
+    const merged: Record<string, number> = {}
+    for (const day of days) merged[day] = Math.max(habitCount(local.habitLogs[habit.id], day), habitCount(remote.habitLogs[habit.id], day))
+    habitLogs[habit.id] = merged
   }
   const sessions = new Map(local.focusSessions.map((item) => [item.id, item]))
   for (const item of remote.focusSessions) sessions.set(item.id, item)
@@ -132,6 +140,8 @@ export default function App() {
   const [layoutScale, setLayoutScale] = useState(1)
   const [defaultReminderMinutesBefore, setDefaultReminderMinutesBefore] = useState(10)
   const [gitee, setGitee] = useState<GiteeConfig | null>(null)
+  const [aiDraft, setAiDraft] = useState({ endpoint: '', model: '', apiKey: '', temperature: '0.4' })
+  const [aiNote, setAiNote] = useState('')
   const [giteeDraft, setGiteeDraft] = useState({ owner: '', repo: '', branch: 'master', path: 'focusnotes/data.json', token: '' })
   const [syncState, setSyncState] = useState<'idle' | 'syncing' | 'ok' | 'error'>('idle')
   const [syncNote, setSyncNote] = useState('')
@@ -169,7 +179,14 @@ export default function App() {
     ...current,
     focusSessions: [...current.focusSessions, session].slice(-3000),
   })), [updateExtras])
-  const timer = usePomodoroTimer(extras.preferences, saveFocusSession)
+  const timer = usePomodoroTimer(extras.preferences, saveFocusSession, (phase) => {
+    const title = phase === 'focus' ? '🍅 完成一个番茄' : '🌿 休息结束'
+    const body = phase === 'focus'
+      ? '做得漂亮！起身活动一下，喝口水再继续。'
+      : '准备好开始下一个专注了吗？保持节奏。'
+    Vibration.vibrate(300)
+    Alert.alert(title, body)
+  })
 
   useEffect(() => {
     const unsubscribe = store.subscribe(() => setTodos(store.all))
@@ -228,8 +245,8 @@ export default function App() {
     const now = new Date()
     const today = dateKey(now)
     const habits = extras.habits.filter((habit) => !habit.archived).slice(0, 3).map((habit) => {
-      const logs = extras.habitLogs[habit.id] ?? []
-      return { name: habit.name, emoji: habit.emoji, color: habit.color, streak: habitStreak(habit, logs, now), done: logs.includes(today), scheduled: isHabitScheduled(habit, now) }
+      const logs = extras.habitLogs[habit.id] ?? {}
+      return { name: habit.name, emoji: habit.emoji, color: habit.color, streak: habitStreak(habit, logs, now), done: habitDayCount(extras.habitLogs, habit.id, today) >= Math.max(1, habit.goal), scheduled: isHabitScheduled(habit, now) }
     })
     widget?.updateHabits(JSON.stringify(habits))
     widget?.updatePrefs(JSON.stringify(extras.preferences.widget))
@@ -373,6 +390,20 @@ export default function App() {
       .catch(() => undefined)
   }, [])
 
+  /** 读取 AI 助手配置：端点与模型随档案同步，密钥仅存本机。 */
+  useEffect(() => {
+    void AsyncStorage.getItem('focusnotes.ai.key')
+      .then((key) => {
+        setAiDraft((current) => ({
+          endpoint: extrasRef.current.preferences.ui.aiEndpoint || current.endpoint,
+          model: extrasRef.current.preferences.ui.aiModel || current.model,
+          temperature: String(extrasRef.current.preferences.ui.aiTemperature || 0.4),
+          apiKey: key || '',
+        }))
+      })
+      .catch(() => undefined)
+  }, [])
+
   /** 进入应用先 pull 一次，把远端合并进本地。 */
   useEffect(() => {
     if (!gitee || loadedRef.current) return
@@ -510,6 +541,18 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todos, extras, loading])
 
+  async function saveAiConfig() {
+    const endpoint = aiDraft.endpoint.trim()
+    const model = aiDraft.model.trim()
+    if (!endpoint || !model) { setAiNote('请填写接口地址与模型名称。'); return }
+    try {
+      await updateExtras((current) => ({ ...current, preferences: { ...current.preferences, ui: { ...current.preferences.ui, aiEndpoint: endpoint, aiModel: model, aiTemperature: Number(aiDraft.temperature) || 0.4 } } }))
+      if (aiDraft.apiKey.trim()) await AsyncStorage.setItem('focusnotes.ai.key', aiDraft.apiKey.trim())
+      setAiDraft((current) => ({ ...current, apiKey: '' }))
+      setAiNote(`已保存：${assistantEndpoint(endpoint)} · ${model}。密钥仅存本机。`)
+    } catch { setAiNote('保存失败，请重试。') }
+  }
+
   async function saveGiteeConfig() {
     const owner = giteeDraft.owner.trim()
     const repo = giteeDraft.repo.trim()
@@ -579,7 +622,7 @@ export default function App() {
   }
 
   async function exportData() {
-    const doc = JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), todos: store.all, extras }, null, 2)
+    const doc = JSON.stringify({ app: 'FocusNotes', version: 2, exportedAt: new Date().toISOString(), todos: store.all, extras }, null, 2)
     const saved = await withWidget().exportData(doc)
     if (saved) Alert.alert('导出完成', '完整备份已保存到你选择的位置。')
   }
@@ -607,8 +650,10 @@ export default function App() {
     Alert.alert('同步完成', '本机与所选 JSON 文件已合并。选择云盘中的同一文件即可在设备间同步。')
   }
 
-  const visible = todos.filter((todo) => !todo.deleted && (filter === 'all' || quadrantOf(todo) === filter))
-  const activeCount = todos.filter((todo) => !todo.completed && !todo.deleted && (selectedListId === 'all' || todo.listId === selectedListId)).length
+  const taskTodos = todos.filter((todo) => !isAnniversary(todo))
+  const anniversaries = todos.filter((todo) => !todo.deleted && isAnniversary(todo) && todo.dueAt)
+  const visible = taskTodos.filter((todo) => !todo.deleted && (filter === 'all' || quadrantOf(todo) === filter))
+  const activeCount = taskTodos.filter((todo) => !todo.completed && !todo.deleted && (selectedListId === 'all' || todo.listId === selectedListId)).length
   const activeLists = extras.lists
   const selectedList = activeLists.find((list) => list.id === selectedListId)
 
@@ -656,7 +701,7 @@ export default function App() {
               <Text style={styles.listPillCount}>{todos.filter((todo) => todo.listId === list.id && !todo.completed && !todo.deleted).length}</Text>
             </Pressable>)}
           </ScrollView>
-          <SmartComposer onAdd={async (draft) => {
+          <SmartComposer preferences={extras.preferences} onAdd={async (draft) => {
             if (draft.dueAt && defaultReminderMinutesBefore > 0) await requestNotificationPermission()
             await store.add({ ...draft, listId: selectedListId === 'all' ? (draft.listId ?? 'inbox') : selectedListId })
           }} />
@@ -676,7 +721,7 @@ export default function App() {
         <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="calendar">
           <ScrollView contentContainerStyle={[styles.content, { paddingBottom: Math.round(100 * layoutScale) }]} keyboardShouldPersistTaps="handled">
             <View style={[styles.intro, { marginVertical: Math.round(22 * layoutScale) }]}><View style={styles.introText}><Text style={styles.eyebrow}>MY FOCUS</Text><Text style={styles.title}>安排每一天。</Text><Text style={styles.subtitle}>按日期查看和安排待办。</Text></View></View>
-            <CalendarView tasks={todos} onCreate={(day) => openNew(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9).toISOString())} onEdit={setEditing} onToggle={(id) => run(store.toggle(id))} />
+            <CalendarView tasks={taskTodos} onCreate={(day) => openNew(new Date(day.getFullYear(), day.getMonth(), day.getDate(), 9).toISOString())} onEdit={setEditing} onToggle={(id) => run(store.toggle(id))} />
           </ScrollView>
         </View>
         <View style={[styles.pagerPage, { backgroundColor: pageBg }]} collapsable={false} key="habits">
@@ -686,30 +731,31 @@ export default function App() {
               habits={extras.habits}
               habitLogs={extras.habitLogs}
               onToggle={(habitId, day) => run(updateExtras((current) => {
-                const logs = toggleHabitLog(current.habitLogs[habitId] ?? [], day)
                 const habit = current.habits.find((item) => item.id === habitId)
+                const next = checkInHabit(current.habitLogs, habitId, day, habit?.goal ?? 1)
+                const logs = next[habitId] ?? {}
                 const streak = habit ? habitStreak(habit, logs, new Date()) : 0
                 return {
                   ...current,
                   habits: current.habits.map((item) => item.id === habitId ? { ...item, streak, bestStreak: Math.max(item.bestStreak || 0, streak) } : item),
-                  habitLogs: { ...current.habitLogs, [habitId]: logs },
+                  habitLogs: next,
                 }
               }))}
               onMark={(habitId, day) => run(updateExtras((current) => {
                 if (!isDateKey(day) || day > dateKey(new Date())) return current
                 const habit = current.habits.find((item) => item.id === habitId)
                 if (!habit || !isHabitScheduled(habit, new Date(`${day}T00:00:00`))) return current
-                const logs = current.habitLogs[habitId] ?? []
-                if (logs.includes(day)) return current
-                const nextLogs = [...logs, day].sort()
-                const streak = habitStreak(habit, nextLogs, new Date())
+                const nextLogs = markHabitCount(current.habitLogs, habitId, day, 1, habit.goal)
+                if (nextLogs === current.habitLogs) return current
+                const logs = nextLogs[habitId] ?? {}
+                const streak = habitStreak(habit, logs, new Date())
                 return {
                   ...current,
                   habits: current.habits.map((item) => item.id === habitId ? { ...item, streak, bestStreak: Math.max(item.bestStreak || 0, streak) } : item),
-                  habitLogs: { ...current.habitLogs, [habitId]: nextLogs },
+                  habitLogs: nextLogs,
                 }
               }))}
-              onAdd={(habit) => run(updateExtras((current) => ({ ...current, habits: [...current.habits, habit], habitLogs: { ...current.habitLogs, [habit.id]: [] } })))}
+              onAdd={(habit) => run(updateExtras((current) => ({ ...current, habits: [...current.habits, habit], habitLogs: { ...current.habitLogs, [habit.id]: {} } })))}
               onUpdate={(habit) => run(updateExtras((current) => ({ ...current, habits: current.habits.map((item) => item.id === habit.id ? habit : item) })))}
               onDelete={(habitId) => { run(updateExtras((current) => { const habitLogs = { ...current.habitLogs }; delete habitLogs[habitId]; return { ...current, habits: current.habits.filter((habit) => habit.id !== habitId), habitLogs } })) }}
             />
@@ -757,6 +803,20 @@ export default function App() {
               {gitee && <Pressable style={styles.giteeAction} onPress={() => void pushToGitee()}><Text style={styles.giteeActionText}>立即上传</Text></Pressable>}
             </View>
             {!!syncNote && <Text style={styles.giteeNote}>{syncNote}</Text>}
+          </View>
+          <View style={styles.layoutSettings}>
+            <View><Text style={styles.actionTitle}>AI 助手</Text><Text style={styles.actionHint}>OpenAI 兼容接口；端点与模型随档案同步，密钥仅存本机</Text></View>
+            <TextInput style={styles.giteeInput} value={aiDraft.endpoint} autoCapitalize="none" autoCorrect={false}
+              placeholder="https://api.deepseek.com" placeholderTextColor="#8e8d93" aria-label="模型接口地址"
+              onChangeText={(value) => setAiDraft((current) => ({ ...current, endpoint: value }))} />
+            <TextInput style={styles.giteeInput} value={aiDraft.model} autoCapitalize="none" autoCorrect={false}
+              placeholder="deepseek-chat" placeholderTextColor="#8e8d93" aria-label="模型名称"
+              onChangeText={(value) => setAiDraft((current) => ({ ...current, model: value }))} />
+            <TextInput style={styles.giteeInput} value={aiDraft.apiKey} autoCapitalize="none" autoCorrect={false}
+              secureTextEntry placeholder={aiDraft.endpoint ? 'API 密钥，留空表示不修改' : 'API 密钥'} placeholderTextColor="#8e8d93" aria-label="API 密钥"
+              onChangeText={(value) => setAiDraft((current) => ({ ...current, apiKey: value }))} />
+            <Pressable style={styles.giteeSave} onPress={() => void saveAiConfig()}><Text style={styles.giteeSaveText}>保存模型配置</Text></Pressable>
+            {!!aiNote && <Text style={styles.giteeNote}>{aiNote}</Text>}
           </View>
           <View style={styles.layoutSettings}>
             <View><Text style={styles.actionTitle}>外观模式</Text><Text style={styles.actionHint}>跟随系统，或手动选择明暗主题</Text></View>

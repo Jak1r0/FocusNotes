@@ -136,9 +136,11 @@ button { cursor: pointer; }
 .habit-check.done { color: var(--w-text); border-color: var(--w-text); background: var(--w-hover); }
 .habit-check:disabled { opacity: .5; cursor: not-allowed; }
 
-.widget-countdown { display: flex; align-items: center; gap: 6px; font-size: 9px; }
-.widget-countdown strong { flex: 0 0 auto; min-width: 24px; color: var(--w-text); font-size: 14px; text-align: right; }
-.widget-countdown span { overflow: hidden; color: var(--w-text); font-size: 8.5px; text-overflow: ellipsis; white-space: nowrap; }
+.widget-countdown { display: grid; grid-template-columns: 2.4em auto minmax(0, 1fr); align-items: center; gap: 4px; font-size: 9px; }
+.widget-countdown strong { min-width: 24px; color: var(--w-text); font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+.widget-countdown span { color: var(--w-text); font-size: 8.5px; }
+.widget-countdown .widget-countdown-unit { white-space: nowrap; }
+.widget-countdown .widget-countdown-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .widget-assistant { margin: 2px 0 5px; color: var(--w-text); font-size: 9px; line-height: 1.5; }
 .widget-assistant-btn { width: 100%; padding: 4px; color: var(--w-text); font-size: 8.5px; border: 1px solid var(--w-border); border-radius: 5px; background: transparent; }

@@ -47,3 +47,13 @@ export function sortTodos(todos: TodoItem[]): TodoItem[] {
 export function isOverdue(todo: TodoItem, now = new Date()): boolean {
   return !todo.completed && todo.dueAt !== null && Date.parse(todo.dueAt) < now.getTime()
 }
+
+/** 倒数纪念日按标签识别；它们只在倒数卡片中展示，不进入普通待办视图。 */
+export function isAnniversary(todo: Pick<TodoItem, 'tags'>): boolean {
+  return todo.tags.some((tag) => tag.trim() === '纪念日')
+}
+
+/** 普通待办：排除倒数纪念日。列表、计数、统计统一走这里。 */
+export function isTaskTodo(todo: TodoItem): boolean {
+  return !isAnniversary(todo)
+}

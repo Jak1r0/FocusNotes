@@ -153,6 +153,21 @@ export interface UiPreferences {
   glassBackground: 'system' | 'image'
   widgetEnabled: boolean
   motion: 'full' | 'light' | 'off'
+  /** 液态玻璃强度百分比。 */
+  liquidStrength: number
+  /** 窗口背景方案 id。 */
+  windowBackgroundId: string
+  /** 图片背景模糊强度。 */
+  artworkBlur: number
+  /** 小部件展示方式。 */
+  widgetDisplayMode: 'floating' | 'normal' | 'desktop'
+  /** 全局提醒开关与提前分钟数。 */
+  remindersEnabled: boolean
+  reminderLeadMinutes: number
+  /** AI 助手的非凭据配置；API 密钥由各端安全存储，不写入 JSON。 */
+  aiEndpoint: string
+  aiModel: string
+  aiTemperature: number
 }
 
 export interface WorkspacePreferences {
@@ -182,12 +197,21 @@ export interface Memo {
   deleted: boolean
 }
 
+/** 单个习惯的打卡日志：YYYY-MM-DD -> 当天实际次数。 */
+export type HabitLog = Record<string, number>
+
+/** 全部习惯的打卡日志：habitId -> HabitLog。 */
+export type HabitLogMap = Record<string, HabitLog>
+
+/** 兼容旧档案的松散日志形态：旧版为 habitId -> 日期数组。 */
+export type LegacyHabitLogs = Record<string, string[] | HabitLog | undefined>
+
 export interface WorkspaceExtras {
   version: number
   lists: TodoList[]
   habits: Habit[]
-  /** habitId -> 已打卡日期（YYYY-MM-DD，本地时区）。 */
-  habitLogs: Record<string, string[]>
+  /** habitId -> 每天打卡次数（YYYY-MM-DD，本地时区）。 */
+  habitLogs: HabitLogMap
   focusSessions: FocusSession[]
   memos: Memo[]
   preferences: WorkspacePreferences

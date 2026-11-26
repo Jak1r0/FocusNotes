@@ -1,14 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
+  checkInHabit,
   createDefaultExtras,
   dateKey,
   habitStreak,
   isDateKey,
   isHabitScheduled,
+  markHabitCount,
   normalizeExtras,
   normalizeTodos,
   TodoStore,
-  toggleHabitLog,
   type FocusSession,
   type Habit,
   type KeyValueStorage,
@@ -96,7 +97,7 @@ function localExtras(): WorkspaceExtras {
   }
 }
 
-function withHabitStreak(current: WorkspaceExtras, habitId: string, logs: string[]): WorkspaceExtras {
+function withHabitStreak(current: WorkspaceExtras, habitId: string, logs: Record<string, number>): WorkspaceExtras {
   const habit = current.habits.find((item) => item.id === habitId)
   const streak = habit ? habitStreak(habit, logs) : 0
   return {
@@ -261,8 +262,9 @@ export function useWorkspace(): WorkspaceApi {
 
   const toggleHabit = useCallback((habitId: string, day: string) => {
     updateExtras((current) => {
-      const logs = toggleHabitLog(current.habitLogs[habitId] ?? [], day)
-      return withHabitStreak(current, habitId, logs)
+      const habit = current.habits.find((item) => item.id === habitId)
+      const next = checkInHabit(current.habitLogs, habitId, day, habit?.goal ?? 1)
+      return withHabitStreak(current, habitId, next[habitId] ?? {})
     })
   }, [updateExtras])
 
@@ -271,14 +273,13 @@ export function useWorkspace(): WorkspaceApi {
     updateExtras((current) => {
       const habit = current.habits.find((item) => item.id === habitId)
       if (!habit || !isHabitScheduled(habit, new Date(`${day}T00:00:00`))) return current
-      const logs = current.habitLogs[habitId] ?? []
-      if (logs.includes(day)) return current
-      return withHabitStreak(current, habitId, [...logs, day].sort())
+      const next = markHabitCount(current.habitLogs, habitId, day, 1, habit.goal)
+      return withHabitStreak(current, habitId, next[habitId] ?? {})
     })
   }, [updateExtras])
 
   const addHabit = useCallback((habit: Habit) => {
-    updateExtras((current) => ({ ...current, habits: [...current.habits, habit], habitLogs: { ...current.habitLogs, [habit.id]: [] } }))
+    updateExtras((current) => ({ ...current, habits: [...current.habits, habit], habitLogs: { ...current.habitLogs, [habit.id]: {} } }))
   }, [updateExtras])
 
   const updateHabit = useCallback((habit: Habit) => {

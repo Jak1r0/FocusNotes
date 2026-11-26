@@ -16,6 +16,9 @@ import type {
   WorkspaceExtras,
   WorkspacePreferences,
   UiPreferences,
+  HabitLog,
+  HabitLogMap,
+  LegacyHabitLogs,
 } from './types'
 
 export const WIDGET_KINDS: Array<{ kind: WidgetKind; label: string; description: string }> = [
@@ -52,7 +55,7 @@ export const DEFAULT_PREFERENCES: WorkspacePreferences = {
   navOrder: ['today', 'pomodoro', 'habits', 'calendar', 'quadrant', 'widgets', 'search', 'assistant'],
   navHidden: ['search'],
   railExpanded: false,
-  ui: { themeMode: 'system', palette: 'tide', windowEffect: 'liquid', windowBlur: 14, windowOpacity: 100, alwaysOnTop: true, uiScale: 1, sidebarOpen: true, glassBackground: 'system', widgetEnabled: true, motion: 'full' },
+  ui: { themeMode: 'system', palette: 'tide', windowEffect: 'liquid', windowBlur: 14, windowOpacity: 100, alwaysOnTop: true, uiScale: 1, sidebarOpen: true, glassBackground: 'system', widgetEnabled: true, motion: 'full', liquidStrength: 50, windowBackgroundId: 'default', artworkBlur: 1, widgetDisplayMode: 'normal', remindersEnabled: true, reminderLeadMinutes: 15, aiEndpoint: '', aiModel: '', aiTemperature: 0.4 },
 }
 
 export const NAV_ITEMS: Array<{ id: NavId; label: string }> = [
@@ -149,15 +152,33 @@ export function isHabitScheduled(habit: Habit, date: Date): boolean {
   return true
 }
 
-export function habitStreak(habit: Habit, logs: readonly string[], now = new Date()): number {
-  const done = new Set(logs)
+/** 单日次数：0 表示没打卡，旧版日期数组里出现一次即算 1 次。 */
+export function habitCount(logs: HabitLog | readonly string[] | undefined, day: string): number {
+  if (!logs) return 0
+  if (Array.isArray(logs)) return logs.filter((value) => value === day).length
+  const value = Number((logs as HabitLog)[day])
+  return Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0
+}
+
+/** 习惯当天的次数（跨全部习惯的日志表）。 */
+export function habitDayCount(logs: LegacyHabitLogs | HabitLogMap | undefined, habitId: string, day: string): number {
+  if (!logs) return 0
+  return habitCount(logs[habitId] as HabitLog | readonly string[] | undefined, day)
+}
+
+function habitCountValue(logs: HabitLog | readonly string[] | undefined, day: string, goal: number): number {
+  return Math.min(Math.max(1, goal), habitCount(logs, day))
+}
+
+export function habitStreak(habit: Habit, logs: HabitLog | readonly string[], now = new Date()): number {
   let cursor = startOfDay(now)
   let streak = 0
   const today = dateKey(now)
+  const goal = Math.max(1, habit.goal)
   for (let guard = 0; guard < 730; guard += 1) {
     if (isHabitScheduled(habit, cursor)) {
       const key = dateKey(cursor)
-      if (done.has(key)) streak += 1
+      if (habitCountValue(logs, key, goal) >= goal) streak += 1
       else if (key !== today) break
     }
     cursor = addDays(cursor, -1)
@@ -165,16 +186,40 @@ export function habitStreak(habit: Habit, logs: readonly string[], now = new Dat
   return streak
 }
 
-export function habitLogsInRange(habit: Habit, logs: readonly string[], from: Date, days: number): boolean[] {
-  const done = new Set(logs)
+export function habitLogsInRange(habit: Habit, logs: HabitLog | readonly string[], from: Date, days: number): boolean[] {
+  const goal = Math.max(1, habit.goal)
   const result: boolean[] = []
   for (let index = 0; index < days; index += 1) {
     const day = addDays(from, index)
-    result.push(isHabitScheduled(habit, day) && done.has(dateKey(day)))
+    result.push(isHabitScheduled(habit, day) && habitCountValue(logs, dateKey(day), goal) >= goal)
   }
   return result
 }
 
+/** 点击一次加一次；达到每日目标后再次点击清空当天记录，方便误操作回退。 */
+export function checkInHabit(logs: HabitLogMap, habitId: string, day: string, goal = 1): HabitLogMap {
+  if (!isDateKey(day)) return logs
+  const limit = Math.max(1, Math.min(goal, 20))
+  const current = habitCount(logs[habitId], day)
+  const next: HabitLog = { ...(logs[habitId] as HabitLog | undefined) }
+  const count = current >= limit ? 0 : current + 1
+  if (count === 0) delete next[day]
+  else next[day] = count
+  return { ...logs, [habitId]: next }
+}
+
+/** 补卡或纠正时直接设定某天次数；0 表示删除当天记录。 */
+export function markHabitCount(logs: HabitLogMap, habitId: string, day: string, count: number, goal = 1): HabitLogMap {
+  if (!isDateKey(day)) return logs
+  const limit = Math.max(1, Math.min(goal, 20))
+  const value = Math.min(limit, Math.max(0, Math.floor(Number(count) || 0)))
+  const next: HabitLog = { ...(logs[habitId] as HabitLog | undefined) }
+  if (value === 0) delete next[day]
+  else next[day] = value
+  return { ...logs, [habitId]: next }
+}
+
+/** 旧版数组日志的切换语义，兼容既有调用；新代码请使用 checkInHabit。 */
 export function toggleHabitLog(logs: readonly string[], day: string): string[] {
   if (!isDateKey(day)) return [...logs]
   const set = new Set(logs)
@@ -261,12 +306,15 @@ export function clampReminderMinutes(value: unknown, max = 10080): number | null
 export function todayCompletion(input: {
   todos: readonly Pick<TodoItem, 'completed' | 'completedAt' | 'deleted'>[]
   habits: readonly Habit[]
-  habitLogs: Record<string, string[]>
+  habitLogs: LegacyHabitLogs | HabitLogMap
   sessions: readonly FocusSession[]
 }, now: Date = new Date()): TodayCompletion {
   const today = dateKey(now)
   const tasks = input.todos.filter((item) => item.completed && !item.deleted && item.completedAt && dateKey(item.completedAt) === today).length
-  const habits = input.habits.filter((item) => !item.archived && isHabitScheduled(item, now) && (input.habitLogs[item.id] ?? []).includes(today)).length
+  const habits = input.habits.filter((item) => {
+    if (item.archived || !isHabitScheduled(item, now)) return false
+    return habitDayCount(input.habitLogs, item.id, today) >= Math.max(1, item.goal)
+  }).length
   const pomodoros = input.sessions.filter((item) => item.mode === 'focus' && dateKey(item.startedAt) === today).length
   return { tasks, habits, pomodoros, total: tasks + habits + pomodoros }
 }
@@ -412,23 +460,34 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
     }
   }
 
-  const habitLogs: Record<string, string[]> = {}
+  const habitLogs: HabitLogMap = {}
   const logsRecord = asRecord(record.habitLogs)
   if (logsRecord) {
     for (const habit of habits) {
       const raw = logsRecord[habit.id]
-      if (!Array.isArray(raw)) continue
-      const days = new Set<string>()
-      for (const day of raw.slice(0, 2000)) {
-        if (typeof day === 'string' && isDateKey(day)) days.add(day)
+      const limit = Math.max(1, Math.min(habit.goal, 20))
+      const daily: HabitLog = {}
+      if (Array.isArray(raw)) {
+        // 旧版：同一天出现一次即 1 次；重复项会被收敛为 1。
+        for (const day of raw.slice(0, 2000)) {
+          if (typeof day === 'string' && isDateKey(day) && daily[day] === undefined) daily[day] = 1
+        }
+      } else {
+        const days = asRecord(raw)
+        if (days) {
+          for (const [day, value] of Object.entries(days).slice(0, 2000)) {
+            const count = Math.floor(Number(value))
+            if (isDateKey(day) && Number.isFinite(count) && count > 0) daily[day] = Math.min(limit, count)
+          }
+        }
       }
-      habitLogs[habit.id] = [...days].sort()
+      habitLogs[habit.id] = daily
     }
   }
 
-  // 连续天数以每日打卡记录为权威来源重算；历史最佳值保留较大者。
+  // 连续天数以每日打卡次数为权威来源重算；历史最佳值保留较大者。
   for (const habit of habits) {
-    const current = habitStreak(habit, habitLogs[habit.id] ?? [])
+    const current = habitStreak(habit, habitLogs[habit.id] ?? {}, now)
     habit.streak = current
     habit.bestStreak = Math.max(habit.bestStreak, current)
   }
@@ -497,6 +556,15 @@ export function normalizeExtras(value: unknown, now = new Date()): WorkspaceExtr
       glassBackground: uiRecord.glassBackground === 'image' ? 'image' : 'system',
       widgetEnabled: uiRecord.widgetEnabled !== false,
       motion: uiRecord.motion === 'light' || uiRecord.motion === 'off' ? uiRecord.motion : 'full',
+      liquidStrength: numberIn(uiRecord.liquidStrength, DEFAULT_PREFERENCES.ui.liquidStrength, 0, 100),
+      windowBackgroundId: text(uiRecord.windowBackgroundId, DEFAULT_PREFERENCES.ui.windowBackgroundId, 60) || DEFAULT_PREFERENCES.ui.windowBackgroundId,
+      artworkBlur: numberIn(uiRecord.artworkBlur, DEFAULT_PREFERENCES.ui.artworkBlur, 0, 32),
+      widgetDisplayMode: uiRecord.widgetDisplayMode === 'floating' || uiRecord.widgetDisplayMode === 'desktop' ? uiRecord.widgetDisplayMode : 'normal',
+      remindersEnabled: uiRecord.remindersEnabled !== false,
+      reminderLeadMinutes: numberIn(uiRecord.reminderLeadMinutes, DEFAULT_PREFERENCES.ui.reminderLeadMinutes, 0, 10080),
+      aiEndpoint: text(uiRecord.aiEndpoint, '', 240),
+      aiModel: text(uiRecord.aiModel, '', 80),
+      aiTemperature: numberIn(uiRecord.aiTemperature ?? 0.4, 0.4, 0, 2),
     },
   }
 

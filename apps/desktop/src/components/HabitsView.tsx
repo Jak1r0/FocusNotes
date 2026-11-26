@@ -3,6 +3,8 @@ import { Check, CalendarPlus, Flame, Plus, Sparkles } from 'lucide-react'
 import {
   addDays,
   dateKey,
+  habitDayCount,
+  habitCount,
   habitStreak,
   isDateKey,
   isHabitScheduled,
@@ -13,7 +15,7 @@ import { HabitDialog } from './HabitDialog'
 
 interface HabitsViewProps {
   habits: Habit[]
-  habitLogs: Record<string, string[]>
+  habitLogs: Record<string, Record<string, number>>
   onToggle: (habitId: string, day: string) => void
   onMark: (habitId: string, day: string) => void
   onAdd: (habit: Habit) => void
@@ -36,7 +38,7 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
 
   const activeHabits = habits.filter((habit) => !habit.archived)
   const todayScheduled = activeHabits.filter((habit) => isHabitScheduled(habit, now))
-  const doneToday = todayScheduled.filter((habit) => (habitLogs[habit.id] ?? []).includes(today)).length
+  const doneToday = todayScheduled.filter((habit) => habitDayCount(habitLogs, habit.id, today) >= Math.max(1, habit.goal)).length
   const rate = todayScheduled.length ? Math.round((doneToday / todayScheduled.length) * 100) : 0
 
   const groups = useMemo(() => {
@@ -67,7 +69,7 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
         {week.map((day, index) => {
           const key = dateKey(day)
           const scheduled = activeHabits.filter((habit) => isHabitScheduled(habit, day))
-          const done = scheduled.filter((habit) => (habitLogs[habit.id] ?? []).includes(key)).length
+          const done = scheduled.filter((habit) => habitDayCount(habitLogs, habit.id, key) >= Math.max(1, habit.goal)).length
           const complete = scheduled.length > 0 && done === scheduled.length
           return (
             <div key={key} className={`week-day${key === today ? ' today' : ''}`}>
@@ -97,10 +99,12 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
             </div>
             <div className="habit-grid">
               {items.map((habit) => {
-                const logs = habitLogs[habit.id] ?? []
+                const logs = habitLogs[habit.id] ?? {}
                 const streak = habitStreak(habit, logs, now)
                 const scheduledToday = isHabitScheduled(habit, now)
-                const done = logs.includes(today)
+                const count = habitCount(logs, today)
+                const goal = Math.max(1, habit.goal)
+                const done = count >= goal
                 return (
                   <article className={`habit-card${done ? ' done' : ''}`} key={habit.id}>
                     <button className="habit-card-head" onClick={() => setEditing(habit)}>
@@ -118,13 +122,13 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
                       {week.map((day) => {
                         const key = dateKey(day)
                         const scheduled = isHabitScheduled(habit, day)
-                        const checked = logs.includes(key)
+                        const checked = habitCount(logs, key) >= goal
                         return (
                           <button
                             key={key}
                             className={`habit-dot${checked ? ' checked' : ''}${!scheduled ? ' off' : ''}${key === today ? ' today' : ''}`}
                             onClick={() => scheduled && onToggle(habit.id, key)}
-                            title={`${day.getMonth() + 1}月${day.getDate()}日${scheduled ? (checked ? ' · 已打卡' : ' · 待打卡') : ' · 休息'}`}
+                            title={`${day.getMonth() + 1}月${day.getDate()}日${scheduled ? (checked ? ` · ${habitCount(logs, key)}/${goal}` : ' · 待打卡') : ' · 休息'}`}
                             aria-label={`${habit.name} ${day.getMonth() + 1}月${day.getDate()}日`}
                           >
                             {checked ? <Check size={10} strokeWidth={3} /> : day.getDate()}
@@ -141,7 +145,7 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
                           onClick={() => scheduledToday && onToggle(habit.id, today)}
                           disabled={!scheduledToday}
                         >
-                          {done ? <><Check size={14} /> 今日已打卡</> : scheduledToday ? '今日打卡' : '今天休息'}
+                          {done ? <><Check size={14} /> 今日已完成 {count}/{goal}</> : scheduledToday ? (goal > 1 ? `今日打卡 ${count}/${goal}` : '今日打卡') : '今天休息'}
                         </button>
                         <button className="habit-makeup-toggle"
                           onClick={() => {
@@ -158,16 +162,16 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
                         <input type="date" max={today} min={habit.startDate} value={makeupDate}
                           aria-label={`${habit.name} 补卡日期`}
                           onChange={(event) => { setMakeupDate(event.target.value); setMakeupError('') }} />
-                        <button className="secondary-button" disabled={logs.includes(makeupDate)}
+                        <button className="secondary-button" disabled={habitCount(logs, makeupDate) > 0}
                           onClick={() => {
                             if (!isDateKey(makeupDate) || makeupDate > today) { setMakeupError('请选择今天或更早的有效日期。'); return }
                             if (!isHabitScheduled(habit, new Date(`${makeupDate}T00:00:00`))) { setMakeupError('该日期不是习惯计划日。'); return }
-                            if (logs.includes(makeupDate)) { setMakeupError('该日期已打卡。'); return }
+                            if (habitCount(logs, makeupDate) > 0) { setMakeupError('该日期已打卡。'); return }
                             onMark(habit.id, makeupDate)
                             setMakeupFor(null)
                             setMakeupError('')
                           }}>
-                          {logs.includes(makeupDate) ? '已打卡' : '登记'}
+                          {habitCount(logs, makeupDate) > 0 ? '已打卡' : '登记'}
                         </button>
                         <button className="secondary-button" onClick={() => setMakeupFor(null)}>取消</button>
                         {makeupError && <span className="habit-makeup-error" role="alert">{makeupError}</span>}

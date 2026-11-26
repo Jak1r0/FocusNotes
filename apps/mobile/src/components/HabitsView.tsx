@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Alert, Modal, StyleSheet, TextInput } from 'react-native'
 import { ThemedPressable as Pressable, ThemedText as Text, ThemedView as View } from '../theme'
-import { addDays, dateKey, habitStreak, isDateKey, isHabitScheduled, startOfDay, type Habit } from '@focusnotes/core'
+import { addDays, dateKey, habitCount, habitDayCount, habitStreak, isDateKey, isHabitScheduled, startOfDay, type Habit } from '@focusnotes/core'
 import { HabitDialog } from './HabitDialog'
 
 interface Props {
   habits: Habit[]
-  habitLogs: Record<string, string[]>
+  habitLogs: Record<string, Record<string, number>>
   onToggle(habitId: string, day: string): void
   onMark(habitId: string, day: string): void
   onAdd(habit: Habit): void
@@ -28,7 +28,7 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
   const week = Array.from({ length: 7 }, (_, index) => addDays(monday, index))
   const active = habits.filter((habit) => !habit.archived)
   const scheduledToday = active.filter((habit) => isHabitScheduled(habit, todayDate))
-  const doneToday = scheduledToday.filter((habit) => (habitLogs[habit.id] ?? []).includes(today)).length
+  const doneToday = scheduledToday.filter((habit) => habitDayCount(habitLogs, habit.id, today) >= Math.max(1, habit.goal)).length
   const rate = scheduledToday.length ? Math.round((doneToday / scheduledToday.length) * 100) : 0
   const groups = useMemo(() => {
     const map = new Map<string, Habit[]>()
@@ -52,7 +52,7 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
     if (!habit) return
     if (!isDateKey(makeupDate) || makeupDate > today) { setMakeupError('请输入今天或更早的有效日期。'); return }
     if (!isHabitScheduled(habit, new Date(`${makeupDate}T00:00:00`))) { setMakeupError('该日期不是习惯计划日。'); return }
-    if ((habitLogs[habit.id] ?? []).includes(makeupDate)) { setMakeupError('该日期已打卡。'); return }
+    if (habitDayCount(habitLogs, habit.id!, makeupDate) > 0) { setMakeupError('该日期已打卡。'); return }
     onMark(habit.id, makeupDate)
     setMakeupHabit(null)
     setMakeupError('')
@@ -75,8 +75,10 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
     </View> : groups.map(([group, items]) => <View key={group} style={styles.group}>
       <View style={styles.groupHeader}><Text style={styles.groupTitle}>{group}</Text><Text style={styles.groupCount}>{items.length} 个习惯</Text></View>
       {items.map((habit) => {
-        const logs = habitLogs[habit.id] ?? []
-        const done = logs.includes(today)
+        const logs = habitLogs[habit.id] ?? {}
+        const goal = Math.max(1, habit.goal)
+        const count = habitCount(logs, today)
+        const done = count >= goal
         const scheduled = isHabitScheduled(habit, todayDate)
         const streak = habitStreak(habit, logs, todayDate)
         return <View key={habit.id} style={styles.card}>
@@ -91,7 +93,7 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
             {week.map((day, index) => {
               const key = dateKey(day)
               const isScheduled = isHabitScheduled(habit, day)
-              const checked = logs.includes(key)
+              const checked = habitCount(logs, key) >= goal
               return <Pressable key={key} style={styles.weekday} disabled={!isScheduled} onPress={() => onToggle(habit.id, key)}>
                 <Text style={[styles.weekLabel, key === today && styles.currentDay]}>{WEEK[index]}</Text>
                 <View style={[styles.weekDot, checked && { backgroundColor: habit.color, borderColor: habit.color }, !isScheduled && styles.restDay]}>
@@ -107,7 +109,7 @@ export function HabitsView({ habits, habitLogs, onToggle, onMark, onAdd, onUpdat
                 <Text style={styles.makeupButtonText}>补卡</Text>
               </Pressable>
               <Pressable style={[styles.checkButton, done && styles.doneButton, !scheduled && styles.disabledButton]} disabled={!scheduled} onPress={() => onToggle(habit.id, today)}>
-                <Text style={[styles.checkButtonText, done && styles.doneText]}>{done ? '✓ 今日已打卡' : scheduled ? '今日打卡' : '今天休息'}</Text>
+                <Text style={[styles.checkButtonText, done && styles.doneText]}>{done ? `✓ 已完成 ${count}/${goal}` : scheduled ? (goal > 1 ? `打卡 ${count}/${goal}` : '今日打卡') : '今天休息'}</Text>
               </Pressable>
             </View>
           </View>

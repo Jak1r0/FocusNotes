@@ -25,6 +25,7 @@ function createId(): string {
 export function usePomodoroTimer(
   preferences: WorkspacePreferences,
   addSession: (session: FocusSession) => Promise<void>,
+  onComplete?: (phase: TimerPhase) => void,
 ): PomodoroTimerApi {
   const [mode, setMode] = useState<TimerMode>('countdown')
   const [phase, setPhase] = useState<TimerPhase>('focus')
@@ -38,6 +39,8 @@ export function usePomodoroTimer(
   preferencesRef.current = preferences
   const addSessionRef = useRef(addSession)
   addSessionRef.current = addSession
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
   const deadline = useRef<number | null>(null)
   const startedAt = useRef<number | null>(null)
   const elapsedBeforeStart = useRef(0)
@@ -74,6 +77,7 @@ export function usePomodoroTimer(
         if (left === 0) {
           setRunning(false)
           deadline.current = null
+          onCompleteRef.current?.(current.phase)
           if (current.phase === 'focus') {
             saveFocusSession(duration('focus'), current.taskId)
             setPhase('break')

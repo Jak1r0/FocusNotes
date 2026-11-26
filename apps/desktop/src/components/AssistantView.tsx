@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Bot, CheckCircle2, MessageSquarePlus, Sparkles, Wand2 } from 'lucide-react'
+import { ArrowUp, Bot, CheckCircle2, MessageSquarePlus, Settings2, Sparkles, Wand2 } from 'lucide-react'
 import {
+  assistantTaskContext,
   HybridSmartParser,
   dateKey,
   isOverdue,
@@ -13,6 +14,7 @@ interface AssistantViewProps {
   tasks: TodoItem[]
   onAddTask: (draft: TodoDraft) => void
   onNavigate: (view: ViewId) => void
+  onOpenSettings: () => void
 }
 
 interface Message {
@@ -20,6 +22,13 @@ interface Message {
   role: 'user' | 'assistant'
   text: string
   action?: { label: string; view: ViewId }
+}
+
+interface AiStatus {
+  endpoint: string
+  model: string
+  hasKey: boolean
+  encrypted: boolean
 }
 
 const parser = new HybridSmartParser()
@@ -33,7 +42,7 @@ const SUGGESTIONS = [
 
 const uid = () => Math.random().toString(36).slice(2, 10)
 
-export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewProps) {
+export function AssistantView({ tasks, onAddTask, onNavigate, onOpenSettings }: AssistantViewProps) {
   const [messages, setMessages] = useState<Message[]>([
     {
       id: uid(),
@@ -43,16 +52,23 @@ export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewPro
   ])
   const [input, setInput] = useState('')
   const [typing, setTyping] = useState(false)
+  const [ai, setAi] = useState<AiStatus | null>(null)
+  const composing = useRef(false)
   const scroller = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     scroller.current?.scrollTo({ top: scroller.current.scrollHeight, behavior: 'smooth' })
   }, [messages, typing])
 
+  useEffect(() => {
+    void window.focusDesktop?.ai?.get?.().then((status) => setAi(status ?? null)).catch(() => setAi(null))
+  }, [])
+
   const open = tasks.filter((todo) => !todo.deleted && !todo.completed)
   const today = dateKey(new Date())
+  const localEnabled = Boolean(ai?.endpoint && ai.model && ai.hasKey)
 
-  const answer = async (text: string): Promise<{ reply: string; action?: Message['action'] }> => {
+  const localAnswer = async (text: string): Promise<{ reply: string; action?: Message['action'] }> => {
     const raw = text.trim()
     const command = raw
       .replace(/^(请|帮我|给我|我要)\s*/u, '')
@@ -68,7 +84,7 @@ export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewPro
           important: parsed.important,
           urgent: parsed.urgent,
           listId: 'inbox',
-          tags: [],
+          tags: parsed.tags ?? [],
         })
         const due = parsed.dueAt
           ? `，截止 ${new Date(parsed.dueAt).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}`
@@ -82,8 +98,7 @@ export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewPro
     }
 
     if (/习惯|打卡/.test(raw)) {
-      const pending = open.length
-      return { reply: `习惯页可以打卡、看连续天数。今天还有 ${pending} 件待办没完成，先挑一件最小的开始吧。`, action: { label: '打开习惯', view: 'habits' } }
+      return { reply: `习惯页可以打卡、看连续天数。今天还有 ${open.length} 件待办没完成，先挑一件最小的开始吧。`, action: { label: '打开习惯', view: 'habits' } }
     }
 
     if (/今天|今日|安排|还有什么|没做/.test(raw)) {
@@ -119,9 +134,25 @@ export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewPro
     }
   }
 
+  const answer = async (text: string): Promise<{ reply: string; action?: Message['action'] }> => {
+    if (!localEnabled || !window.focusDesktop?.ai?.chat) return localAnswer(text)
+    // 创建待办仍然走本地解析器，保证写操作确定可控；其余问题交给大模型。
+    if (/添加|新建|记一下|提醒我/.test(text.trim())) return localAnswer(text)
+    const result = await window.focusDesktop.ai.chat([
+      { role: 'system', content: '你是 FocusNotes 的本地任务助手。用简体中文简洁作答，优先给出具体行动建议，不编造数据。\n当前待办：\n' + assistantTaskContext(tasks) },
+      ...messages.slice(-8).map((item) => ({ role: item.role, content: item.text })),
+      { role: 'user', content: text },
+    ])
+    if (result.ok && result.text) {
+      return { reply: result.text, action: { label: '查看今天', view: 'today' } }
+    }
+    const fallback = await localAnswer(text)
+    return { reply: `${fallback.reply}\n\n（模型调用失败：${result.error ?? '未知错误'}，已用本地规则回答。）`, action: fallback.action }
+  }
+
   const send = (text: string) => {
     const value = text.trim()
-    if (!value) return
+    if (!value || composing.current) return
     const userMessage: Message = { id: uid(), role: 'user', text: value }
     setMessages((prev) => [...prev, userMessage])
     setInput('')
@@ -130,7 +161,7 @@ export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewPro
       const result = await answer(value)
       setTyping(false)
       setMessages((prev) => [...prev, { id: uid(), role: 'assistant', text: result.reply, action: result.action }])
-    }, 420)
+    }, localEnabled ? 120 : 420)
   }
 
   return (
@@ -138,7 +169,10 @@ export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewPro
       <aside className="assistant-side card">
         <div className="assistant-brand">
           <span className="assistant-avatar"><Bot size={18} /></span>
-          <div><strong>FocusNotes 助手</strong><small>本地运行 · 数据不出设备</small></div>
+          <div>
+            <strong>FocusNotes 助手</strong>
+            <small>{localEnabled ? `${ai!.model} · 大模型已接入` : '本地规则 · 可接入大模型'}</small>
+          </div>
         </div>
         <button className="ghost-button wide" onClick={() => setMessages([{ id: uid(), role: 'assistant', text: '新会话开始了。今天想先做点什么？' }])}>
           <MessageSquarePlus size={14} /> 新会话
@@ -147,10 +181,18 @@ export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewPro
           <span className="sidebar-label">当前会话</span>
           <div className="assistant-history-row active"><span>任务规划与专注建议</span><small>刚刚</small></div>
         </div>
-        <div className="assistant-tip">
-          <Sparkles size={13} />
-          <p>我只读取本机任务数据，不会上传任何内容。</p>
-        </div>
+        {localEnabled ? (
+          <div className="assistant-tip">
+            <Sparkles size={13} />
+            <p>已接入 OpenAI 兼容模型{ai!.encrypted ? '，密钥加密保存在本机。' : '。'}</p>
+          </div>
+        ) : (
+          <button className="assistant-tip assistant-tip-button" onClick={onOpenSettings}
+            title="在设置里填写模型接口">
+            <Settings2 size={13} />
+            <p>未配置模型。点此到设置里接入 OpenAI 兼容 API。</p>
+          </button>
+        )}
       </aside>
 
       <section className="assistant-main card">
@@ -191,11 +233,14 @@ export function AssistantView({ tasks, onAddTask, onNavigate }: AssistantViewPro
           <input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); send(input) } }}
+            onCompositionStart={() => { composing.current = true }}
+            onCompositionEnd={(event) => { composing.current = false; setInput(event.currentTarget.value) }}
+            onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !composing.current && !event.nativeEvent.isComposing) { event.preventDefault(); send(input) } }}
             placeholder="问我今天该做什么，或直接说「添加任务 …」"
             aria-label="输入消息"
+            autoComplete="off"
           />
-          <button className="send-button" onClick={() => send(input)} disabled={!input.trim()} aria-label="发送">
+          <button className="send-button" onClick={() => send(input)} disabled={!input.trim() || typing} aria-label="发送">
             <ArrowUp size={17} />
           </button>
         </div>

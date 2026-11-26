@@ -4,6 +4,7 @@ import { ListTodo, X } from 'lucide-react'
 import {
   dateKey,
   FONT_OPTIONS,
+  isAnniversary,
   LIST_COLORS,
   sortTodos,
   todayCompletion,
@@ -64,7 +65,16 @@ export default function App() {
   }, [])
 
   const ws = useWorkspace()
-  const timer = usePomodoroTimer(ws.extras.preferences, ws.addFocusSession, ws.notify)
+  const [pomodoroNotice, setPomodoroNotice] = useState('')
+  useEffect(() => {
+    if (!pomodoroNotice) return
+    const timer = window.setTimeout(() => setPomodoroNotice(''), 7000)
+    return () => window.clearTimeout(timer)
+  }, [pomodoroNotice])
+  const timer = usePomodoroTimer(ws.extras.preferences, ws.addFocusSession, (title, body) => {
+    ws.notify(title, body)
+    setPomodoroNotice(body)
+  })
   const [view, setView] = useState<ViewId>('today')
   const [editor, setEditor] = useState<EditorState | null>(null)
   const [deleting, setDeleting] = useState<TodoItem | null>(null)
@@ -161,6 +171,8 @@ export default function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>(loadThemeMode)
   const [palette, setPalette] = useState(() => resolvePalette(window.localStorage.getItem('focusnotes.palette')).id)
   const [motion, setMotion] = useState(() => resolveMotion(window.localStorage.getItem('focusnotes.motion')))
+  const [remindEnabled, setRemindEnabled] = useState(() => loadBool('focusnotes.remind', true))
+  const [leadMinutes, setLeadMinutes] = useState(() => Number(window.localStorage.getItem('focusnotes.remindMinutes') ?? 15))
   const [hydratedUi, setHydratedUi] = useState<UiPreferences | null>(null)
 
   useEffect(() => {
@@ -176,6 +188,11 @@ export default function App() {
     setGlassBackground(ui.glassBackground)
     setWidgetEnabled(ui.widgetEnabled)
     setMotion(ui.motion)
+    setLiquidStrength(ui.liquidStrength)
+    setWindowBackgroundId(resolveWindowBackground(ui.windowBackgroundId).id)
+    setArtworkBlur(ui.artworkBlur)
+    setRemindEnabled(ui.remindersEnabled)
+    setLeadMinutes(ui.reminderLeadMinutes)
     setHydratedUi(ui)
   }, [ws.ready, ws.extras.preferences.ui])
 
@@ -194,13 +211,22 @@ export default function App() {
       glassBackground,
       widgetEnabled,
       motion,
+      liquidStrength,
+      windowBackgroundId,
+      artworkBlur,
+      widgetDisplayMode,
+      remindersEnabled: remindEnabled,
+      reminderLeadMinutes: leadMinutes,
     }
     if (next.themeMode === ui.themeMode && next.palette === ui.palette && next.windowEffect === ui.windowEffect
       && next.windowBlur === ui.windowBlur && next.windowOpacity === ui.windowOpacity && next.alwaysOnTop === ui.alwaysOnTop
       && next.sidebarOpen === ui.sidebarOpen && next.glassBackground === ui.glassBackground
-      && next.widgetEnabled === ui.widgetEnabled && next.motion === ui.motion) return
+      && next.widgetEnabled === ui.widgetEnabled && next.motion === ui.motion
+      && next.liquidStrength === ui.liquidStrength && next.windowBackgroundId === ui.windowBackgroundId
+      && next.artworkBlur === ui.artworkBlur && next.widgetDisplayMode === ui.widgetDisplayMode
+      && next.remindersEnabled === ui.remindersEnabled && next.reminderLeadMinutes === ui.reminderLeadMinutes) return
     ws.updateExtras((current) => ({ ...current, preferences: { ...current.preferences, ui: next } }))
-  }, [ws.ready, ws.extras.preferences.ui, hydratedUi, themeMode, palette, windowEffect, windowBlur, opacity, alwaysOnTop, sidebarPreference, glassBackground, widgetEnabled, motion, ws.updateExtras])
+  }, [ws.ready, ws.extras.preferences.ui, hydratedUi, themeMode, palette, windowEffect, windowBlur, opacity, alwaysOnTop, sidebarPreference, glassBackground, widgetEnabled, motion, liquidStrength, windowBackgroundId, artworkBlur, widgetDisplayMode, remindEnabled, leadMinutes, ws.updateExtras])
 
   useEffect(() => {
     document.documentElement.dataset.motion = motion
@@ -240,12 +266,15 @@ export default function App() {
     ws.updateExtras((current) => ({ ...current, widgetPresets: current.widgetPresets.filter((item) => item.id !== id) }))
   }, [ws.updateExtras])
   const [dark, setDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
-  const [remindEnabled, setRemindEnabled] = useState(() => loadBool('focusnotes.remind', true))
-  const [leadMinutes, setLeadMinutes] = useState(() => Number(window.localStorage.getItem('focusnotes.remindMinutes') ?? 15))
   const [sunInfo, setSunInfo] = useState<{ city: string; sunrise: number; sunset: number } | null>(null)
 
   const todos = ws.todos
-  const active = useMemo(() => todos.filter((todo) => !todo.deleted), [todos])
+  // 倒数纪念日只在倒数卡片里出现，不进入任何待办视图与计数。
+  const anniversaries = useMemo(
+    () => todos.filter((todo) => !todo.deleted && isAnniversary(todo) && todo.dueAt),
+    [todos],
+  )
+  const active = useMemo(() => todos.filter((todo) => !todo.deleted && !isAnniversary(todo)), [todos])
   const open = useMemo(() => sortTodos(active.filter((todo) => !todo.completed)), [active])
   const completed = useMemo(() => active.filter((todo) => todo.completed), [active])
   const trashed = useMemo(() => todos.filter((todo) => todo.deleted), [todos])
@@ -485,7 +514,7 @@ export default function App() {
       lists={lists}
       defaultListId="inbox"
       defaultDueAt={defaultDueAt}
-      countdown={active.filter((todo) => todo.tags.includes('纪念日') && todo.dueAt && !todo.completed).slice(0, 4)}
+      countdown={anniversaries.filter((todo) => !todo.completed).slice(0, 4)}
       emptyTitle="今天没有待办"
       onAdd={ws.addTask}
       onToggle={(id) => void run(ws.toggleTask(id))}
@@ -574,6 +603,7 @@ export default function App() {
       tasks={open}
       timer={timer}
       completion={completion}
+      notice={pomodoroNotice}
     />
   } else if (view === 'memos') {
     title = '备忘录'
@@ -626,13 +656,14 @@ export default function App() {
   } else if (view === 'assistant') {
     title = 'AI 助手'
     subtitle = '本地运行，数据不出设备'
-    content = <AssistantView tasks={active} onAddTask={(draft) => void run(ws.addTask(draft))} onNavigate={setView} />
+    content = <AssistantView tasks={active} onAddTask={(draft) => void run(ws.addTask(draft))} onNavigate={setView} onOpenSettings={() => setSettingsOpen(true)} />
   } else if (view === 'widgets') {
     title = '概览'
     subtitle = '一屏看到今天'
     content = <WidgetView
       widgets={ws.extras.widgets}
       tasks={active}
+      anniversaries={anniversaries}
       lists={lists}
       habits={ws.extras.habits}
       habitLogs={ws.extras.habitLogs}

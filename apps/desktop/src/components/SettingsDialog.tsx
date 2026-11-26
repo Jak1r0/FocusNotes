@@ -46,6 +46,7 @@ import { PALETTES, type PaletteId } from '../palettes'
 import { MOTION_OPTIONS, resolveMotion, type MotionMode } from '../motion'
 import type { WidgetPreset } from '@focusnotes/core'
 import { GiteePanel } from './GiteePanel'
+import { AiPanel } from './AiPanel'
 
 interface SettingsDialogProps {
   theme: ThemeMode
@@ -105,7 +106,7 @@ interface SettingsDialogProps {
   onClose: () => void
 }
 
-type Section = 'appearance' | 'reminders' | 'focus' | 'widgets' | 'data'
+type Section = 'appearance' | 'reminders' | 'focus' | 'widgets' | 'data' | 'ai'
 
 const THEMES: { id: ThemeMode; label: string; icon: typeof Sun }[] = [
   { id: 'system', label: '跟随系统', icon: Monitor },
@@ -169,6 +170,7 @@ const SECTIONS: { id: Section; label: string; icon: typeof Palette }[] = [
   { id: 'focus', label: '专注设置', icon: Settings2 },
   { id: 'widgets', label: '桌面小部件', icon: LayoutGrid },
   { id: 'data', label: '数据与档案', icon: Database },
+  { id: 'ai', label: 'AI 助手', icon: Sparkles },
 ]
 
 export function SettingsDialog(props: SettingsDialogProps) {
@@ -612,6 +614,13 @@ export function SettingsDialog(props: SettingsDialogProps) {
                 <Cloud size={15} />
                 <p>FocusNotes 不上传任务内容。档案以 JSON 保存在本机，清单与习惯可导出为 CSV 表格。</p>
               </div>
+            </>
+          )}
+
+          {section === 'ai' && (
+            <>
+              <header className="settings-head"><h2>AI 助手</h2><p>接入 OpenAI 兼容大模型，助手即可理解自然语言。</p></header>
+              <AiPanel onPreferences={(patch) => props.onPreferences({ ui: { ...props.preferences.ui, ...patch } })} />
             </>
           )}
         </section>
