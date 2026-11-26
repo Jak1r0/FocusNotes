@@ -21,6 +21,13 @@
 - 个人 JSON 备份版本升级为 2；v1 文件仍可导入。
 - 移动端 API 密钥保存在应用本机存储（Android Keystore 未接入，请勿在共享设备上保存敏感密钥）。
 
+### 发布产物与校验
+
+- Windows：`FocusNotes-Setup-0.2.1.exe`，SHA-256 `2e409c37590ef7201abf5524376963b399b41333bed524aa30d5cda3a767c184`。
+- Android：`FocusNotes-0.2.1.apk`（versionCode 9，v1/v2/v3 签名），SHA-256 `b7baeced9c61418093ba71606a6ab9e4a04e227a3ea211e877c693f360984c2d`。
+- 签名证书 SHA-256：`7a851890d7d62edf66d08f7183846517cdcb98f6fc24fc23bfa87b2f2aa39c2b`，与 0.2.0 相同，可直接覆盖安装。
+- 附件：`FocusNotes-0.2.1-cert.pem`、`FocusNotes-0.2.1.apk.sha256`、`FocusNotes-Setup-0.2.1.exe.sha256`；私钥 keystore 不公开。
+
 ## 0.2.0（Windows / Android）
 
 发布日期：2026-11-24
